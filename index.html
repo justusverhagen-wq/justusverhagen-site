@@ -1,13 +1,110 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Justus Verhagen Apps</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f7fa;
+            margin: 0;
+            padding: 0;
+            color: #222;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 60px auto;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 40px;
+        }
+
+        .app-grid {
+            display: grid;
+            gap: 20px;
+        }
+
+        .app-card {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .app-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+        }
+
+        .app-card a {
+            text-decoration: none;
+            color: #0066cc;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .app-description {
+            margin-top: 8px;
+            color: #555;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 50px;
+            color: #888;
+            font-size: 0.9rem;
+        }
+    </style>
 </head>
 <body>
-    <h1>My Apps</h1>
 
-    <ul>
-        <li><a href="/watchstrapper">WatchStrapper</a></li>
-    </ul>
+<div class="container">
+    <h1>Justus Verhagen Apps</h1>
+    <p class="subtitle">Tools, calculators, and utilities</p>
+
+    <div class="app-grid">
+
+        <div class="app-card">
+            <a href="/watchstrapper">WatchStrapper</a>
+            <div class="app-description">
+                Watch strap selection and visualization tool.
+            </div>
+        </div>
+
+        <div class="app-card">
+            <a href="/markethopper">MarketHopper</a>
+            <div class="app-description">
+                Market analysis and research application.
+            </div>
+        </div>
+
+        <div class="app-card">
+            <a href="/hallvirtualizer">HallVirtualizer</a>
+            <div class="app-description">
+                Acoustic hall and room virtualization tool.
+            </div>
+        </div>
+
+    </div>
+
+    <footer>
+        © Justus Verhagen
+    </footer>
+</div>
+
 </body>
 </html>
+
