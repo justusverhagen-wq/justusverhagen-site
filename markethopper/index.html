@@ -1,10 +1,1154 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" data-bs-theme="dark">
 <head>
-    <title>MarketHopper</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MarketHopper by Justus Verhagen</title>
+    <!-- Bootstrap 5 CSS CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Chart.js, Luxon, Zoom Plugin, Annotation Plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <style>
+        body { background-color: #0b0f19; color: #e2e8f0; font-family: system-ui, -apple-system, sans-serif; }
+        .card { background-color: #111827; border: 1px solid #1f2937; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .table-custom { color: #e2e8f0; background-color: transparent; }
+        .table-custom th { background-color: #1f2937; color: #9ca3af; border-color: #374151; font-size: 0.85rem; text-transform: uppercase; }
+        .table-custom td { border-color: #1f2937; font-size: 0.9rem; vertical-align: middle; }
+        .clickable-row { cursor: pointer; transition: background-color 0.2s; }
+        .clickable-row:hover { background-color: rgba(59, 130, 246, 0.15) !important; }
+        .badge-golden { background-color: #10b981; color: #ffffff; }
+        .badge-death { background-color: #ef4444; color: #ffffff; }
+        .metric-card { border-left: 4px solid #3b82f6; }
+        .strategy-card { border-left: 4px solid #3b82f6; background-color: rgba(59, 130, 246, 0.03); padding: 8px 12px !important; }
+        .progress { background-color: #1f2937; height: 8px; }
+        .chart-container-white { background-color: #ffffff; border-radius: 6px; padding: 12px; }
+        code { color: #38bdf8; background-color: rgba(56, 189, 248, 0.1); padding: 2px 6px; border-radius: 4px; }
+        .compact-slider { margin-bottom: 5px !important; }
+        .form-range { height: 0.75rem; }
+        .stepper-btn { padding: 0.1rem 0.35rem; font-size: 0.7rem; line-height: 1; }
+    </style>
 </head>
-<body>
-    <h1>MarketHopper</h1>
-    <p>Your app goes here.</p>
+<body class="py-3">
+
+    <div class="container-fluid px-4">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary">
+            <div>
+                <h1 class="h4 fw-bold text-light mb-0">S&P 500 Terminal: Empirical Velocity Model + 60-Day Min Hold Range</h1>
+                <p class="text-muted small mb-0" id="feed-subtitle">Connecting via Edge Serverless Proxy...</p>
+            </div>
+            <div class="text-end">
+                <span class="badge bg-warning text-dark px-3 py-1" id="feed-status">
+                    Connecting to Exchange...
+                </span>
+                <div class="text-muted mt-1" id="last-updated" style="font-size: 0.75rem;">Synced: Live</div>
+            </div>
+        </div>
+
+        <!-- KPI Summary Cards -->
+        <div class="row g-2 mb-3">
+            <div class="col-xl-3 col-md-6">
+                <div class="card metric-card p-2">
+                    <div class="text-muted small text-uppercase fw-semibold" style="font-size: 0.75rem;">S&P 500 Latest Price</div>
+                    <div class="h5 fw-bold text-white mt-1 mb-0" id="kpi-price">--</div>
+                    <div class="small text-success" style="font-size: 0.7rem;">Official Daily Close</div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card metric-card p-2" style="border-left-color: #06b6d4;">
+                    <div class="text-muted small text-uppercase fw-semibold" style="font-size: 0.75rem;">5-Day SMA ($V_5$)</div>
+                    <div class="h5 fw-bold text-white mt-1 mb-0" id="kpi-v5">--</div>
+                    <div class="small text-muted" style="font-size: 0.7rem;">Short-Term Velocity</div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card metric-card p-2" style="border-left-color: #0ea5e9;">
+                    <div class="text-muted small text-uppercase fw-semibold" style="font-size: 0.75rem;">320-Day SMA ($V_{320}$)</div>
+                    <div class="h5 fw-bold text-white mt-1 mb-0" id="kpi-v320">--</div>
+                    <div class="small text-muted" style="font-size: 0.7rem;">Secular Trend Velocity</div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card metric-card p-2" style="border-left-color: #10b981;">
+                    <div class="text-muted small text-uppercase fw-semibold" style="font-size: 0.75rem;">Active Strategy Status</div>
+                    <div class="h5 fw-bold text-white mt-1 mb-0" id="kpi-regime">--</div>
+                    <div class="small text-success" style="font-size: 0.7rem;">Empirical Model State</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dynamic Controls with Steppers & Min In/Out Sliders (Max 60) -->
+        <div class="card mb-3 p-3 border-info">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="card-title text-light mb-0 fw-bold">Empirical Thresholds, Min In/Out Holding Periods & Steppers</h6>
+                <span class="badge bg-info text-dark" style="font-size: 0.7rem;">Real-Time Recalculation</span>
+            </div>
+            <div class="row g-3">
+                <!-- Entry Velocity Sliders & Min In Days -->
+                <div class="col-md-6 border-end border-secondary pe-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <h6 class="text-success small fw-bold text-uppercase mb-0" style="font-size: 0.75rem;">Entry Gates & Min In Period</h6>
+                        <span class="text-muted" style="font-size: 0.7rem;">On/Off • AND/OR</span>
+                    </div>
+
+                    <!-- V5 Entry -->
+                    <div class="compact-slider">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">5D Entry: <span id="val-v5entry" class="text-success fw-bold">--</span></label>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="form-check form-switch m-0" style="min-height: auto;">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="active-v5entry" checked onchange="onSliderChange()">
+                                    <label class="form-check-input-label small text-light" style="font-size: 0.65rem;">Use</label>
+                                </div>
+                                <div class="form-check form-switch m-0" style="min-height: auto;">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="logic-v5entry" checked onchange="onSliderChange()">
+                                    <label class="form-check-input-label small text-info fw-bold" id="lbl-logic-v5entry" style="font-size: 0.65rem;">AND</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 mt-1">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('v5entry', -1)">&larr;</button>
+                            <input type="range" class="form-range flex-grow-1" id="slider-v5entry" step="0.00001" oninput="onSliderChange()">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('v5entry', 1)">&rarr;</button>
+                        </div>
+                    </div>
+
+                    <!-- V20 Entry -->
+                    <div class="compact-slider">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">20D Entry: <span id="val-v20entry" class="text-success fw-bold">--</span></label>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="form-check form-switch m-0" style="min-height: auto;">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="active-v20entry" checked onchange="onSliderChange()">
+                                    <label class="form-check-input-label small text-light" style="font-size: 0.65rem;">Use</label>
+                                </div>
+                                <div class="form-check form-switch m-0" style="min-height: auto;">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="logic-v20entry" checked onchange="onSliderChange()">
+                                    <label class="form-check-input-label small text-info fw-bold" id="lbl-logic-v20entry" style="font-size: 0.65rem;">AND</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 mt-1">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('v20entry', -1)">&larr;</button>
+                            <input type="range" class="form-range flex-grow-1" id="slider-v20entry" step="0.00001" oninput="onSliderChange()">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('v20entry', 1)">&rarr;</button>
+                        </div>
+                    </div>
+
+                    <!-- V80 Entry -->
+                    <div class="compact-slider">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">80D Entry: <span id="val-v80entry" class="text-success fw-bold">--</span></label>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="form-check form-switch m-0" style="min-height: auto;">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="active-v80entry" checked onchange="onSliderChange()">
+                                    <label class="form-check-input-label small text-light" style="font-size: 0.65rem;">Use</label>
+                                </div>
+                                <div class="form-check form-switch m-0" style="min-height: auto;">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="logic-v80entry" checked onchange="onSliderChange()">
+                                    <label class="form-check-input-label small text-info fw-bold" id="lbl-logic-v80entry" style="font-size: 0.65rem;">AND</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 mt-1">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('v80entry', -1)">&larr;</button>
+                            <input type="range" class="form-range flex-grow-1" id="slider-v80entry" step="0.00001" oninput="onSliderChange()">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('v80entry', 1)">&rarr;</button>
+                        </div>
+                    </div>
+
+                    <!-- V320 Entry -->
+                    <div class="compact-slider">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">320D Entry: <span id="val-v320entry" class="text-success fw-bold">--</span></label>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="form-check form-switch m-0" style="min-height: auto;">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="active-v320entry" checked onchange="onSliderChange()">
+                                    <label class="form-check-input-label small text-light" style="font-size: 0.65rem;">Use</label>
+                                </div>
+                                <div class="form-check form-switch m-0" style="min-height: auto;">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="logic-v320entry" checked onchange="onSliderChange()">
+                                    <label class="form-check-input-label small text-info fw-bold" id="lbl-logic-v320entry" style="font-size: 0.65rem;">AND</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 mt-1">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('v320entry', -1)">&larr;</button>
+                            <input type="range" class="form-range flex-grow-1" id="slider-v320entry" step="0.00001" oninput="onSliderChange()">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('v320entry', 1)">&rarr;</button>
+                        </div>
+                    </div>
+
+                    <!-- Minimum In Days Slider (Max 60) -->
+                    <div class="compact-slider mt-2 pt-1 border-top border-secondary">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="form-label small text-success fw-bold mb-0" style="font-size: 0.75rem;">Min In Days: <span id="val-minin" class="text-white fw-bold">1</span></label>
+                            <span class="text-muted" style="font-size: 0.65rem;">Min Invested Hold (1–60)</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 mt-1">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('minin', -1)">&larr;</button>
+                            <input type="range" class="form-range flex-grow-1" id="slider-minin" min="1" max="60" step="1" value="1" oninput="onSliderChange()">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('minin', 1)">&rarr;</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Exit Velocity Sliders & Minimum Out Days (Max 60) -->
+                <div class="col-md-6 ps-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <h6 class="text-danger small fw-bold text-uppercase mb-0" style="font-size: 0.75rem;">Exit Gates & Min Out Period</h6>
+                        <span class="text-muted" style="font-size: 0.7rem;">On/Off • AND/OR</span>
+                    </div>
+
+                    <!-- V5 Exit -->
+                    <div class="compact-slider">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">5D Exit: <span id="val-v5exit" class="text-danger fw-bold">--</span></label>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="form-check form-switch m-0" style="min-height: auto;">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="active-v5exit" checked onchange="onSliderChange()">
+                                    <label class="form-check-input-label small text-light" style="font-size: 0.65rem;">Use</label>
+                                </div>
+                                <div class="form-check form-switch m-0" style="min-height: auto;">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="logic-v5exit" onchange="onSliderChange()">
+                                    <label class="form-check-input-label small text-warning fw-bold" id="lbl-logic-v5exit" style="font-size: 0.65rem;">OR</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 mt-1">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('v5exit', -1)">&larr;</button>
+                            <input type="range" class="form-range flex-grow-1" id="slider-v5exit" step="0.00001" oninput="onSliderChange()">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('v5exit', 1)">&rarr;</button>
+                        </div>
+                    </div>
+
+                    <!-- V20 Exit -->
+                    <div class="compact-slider">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">20D Exit: <span id="val-v20exit" class="text-danger fw-bold">--</span></label>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="form-check form-switch m-0" style="min-height: auto;">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="active-v20exit" checked onchange="onSliderChange()">
+                                    <label class="form-check-input-label small text-light" style="font-size: 0.65rem;">Use</label>
+                                </div>
+                                <div class="form-check form-switch m-0" style="min-height: auto;">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="logic-v20exit" onchange="onSliderChange()">
+                                    <label class="form-check-input-label small text-warning fw-bold" id="lbl-logic-v20exit" style="font-size: 0.65rem;">OR</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 mt-1">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('v20exit', -1)">&larr;</button>
+                            <input type="range" class="form-range flex-grow-1" id="slider-v20exit" step="0.00001" oninput="onSliderChange()">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('v20exit', 1)">&rarr;</button>
+                        </div>
+                    </div>
+
+                    <!-- V80 Exit -->
+                    <div class="compact-slider">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">80D Exit: <span id="val-v80exit" class="text-danger fw-bold">--</span></label>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="form-check form-switch m-0" style="min-height: auto;">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="active-v80exit" checked onchange="onSliderChange()">
+                                    <label class="form-check-input-label small text-light" style="font-size: 0.65rem;">Use</label>
+                                </div>
+                                <div class="form-check form-switch m-0" style="min-height: auto;">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="logic-v80exit" onchange="onSliderChange()">
+                                    <label class="form-check-input-label small text-warning fw-bold" id="lbl-logic-v80exit" style="font-size: 0.65rem;">OR</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 mt-1">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('v80exit', -1)">&larr;</button>
+                            <input type="range" class="form-range flex-grow-1" id="slider-v80exit" step="0.00001" oninput="onSliderChange()">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('v80exit', 1)">&rarr;</button>
+                        </div>
+                    </div>
+
+                    <!-- V320 Exit -->
+                    <div class="compact-slider">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">320D Exit: <span id="val-v320exit" class="text-danger fw-bold">--</span></label>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="form-check form-switch m-0" style="min-height: auto;">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="active-v320exit" checked onchange="onSliderChange()">
+                                    <label class="form-check-input-label small text-light" style="font-size: 0.65rem;">Use</label>
+                                </div>
+                                <div class="form-check form-switch m-0" style="min-height: auto;">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="logic-v320exit" onchange="onSliderChange()">
+                                    <label class="form-check-input-label small text-warning fw-bold" id="lbl-logic-v320exit" style="font-size: 0.65rem;">OR</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 mt-1">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('v320exit', -1)">&larr;</button>
+                            <input type="range" class="form-range flex-grow-1" id="slider-v320exit" step="0.00001" oninput="onSliderChange()">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('v320exit', 1)">&rarr;</button>
+                        </div>
+                    </div>
+
+                    <!-- Minimum Out Days Slider (Max 60) -->
+                    <div class="compact-slider mt-2 pt-1 border-top border-secondary">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="form-label small text-danger fw-bold mb-0" style="font-size: 0.75rem;">Min Out Days: <span id="val-minout" class="text-white fw-bold">1</span></label>
+                            <span class="text-muted" style="font-size: 0.65rem;">Min Cash Hold (1–60)</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 mt-1">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('minout', -1)">&larr;</button>
+                            <input type="range" class="form-range flex-grow-1" id="slider-minout" min="1" max="60" step="1" value="1" oninput="onSliderChange()">
+                            <button type="button" class="btn btn-outline-secondary stepper-btn" onclick="stepSlider('minout', 1)">&rarr;</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Strategy Summary Cards with Adjustable Start Year Selector -->
+        <div class="card mb-3 p-2">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
+                <span class="text-light fw-bold small">Multi-Strategy Performance Comparison</span>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-muted small" style="font-size: 0.7rem;">Start Year:</span>
+                    <select id="start-year-select" class="form-select form-select-sm bg-dark text-light border-secondary py-0 px-2" style="font-size: 0.7rem; width: auto;" onchange="onStartYearChange()">
+                        <option value="1927">1927 (Earliest)</option>
+                        <option value="1950">1950</option>
+                        <option value="1970">1970</option>
+                        <option value="1990">1990</option>
+                        <option value="1997" selected>1997</option>
+                        <option value="2000">2000 (Dot-Com)</option>
+                        <option value="2008">2008 (GFC)</option>
+                        <option value="2020">2020 (COVID)</option>
+                    </select>
+                    <span class="badge bg-outline-info border border-info text-info py-1 px-2" id="backtest-span" style="font-size: 0.7rem;">Span: --</span>
+                </div>
+            </div>
+
+            <div class="row g-2">
+                <!-- 1. Buy & Hold -->
+                <div class="col-xl col-md-4">
+                    <div class="card strategy-card h-100" style="border-left-color: #0284c7;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-uppercase fw-bold text-info" style="font-size: 0.7rem;">1. Buy & Hold</span>
+                            <span class="fw-bold text-white" id="hold-total-return" style="font-size: 0.85rem;">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-1" style="font-size: 0.75rem;">
+                            <span class="text-muted">Wealth: <strong id="hold-final-wealth" class="text-light">$0</strong></span>
+                            <span>CAGR: <strong id="hold-cagr" class="text-light">--</strong></span>
+                            <span>MDD: <strong id="hold-mdd" class="text-danger">--</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. 20/100 Cross -->
+                <div class="col-xl col-md-4">
+                    <div class="card strategy-card h-100" style="border-left-color: #d97706;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-uppercase fw-bold text-warning" style="font-size: 0.7rem;">2. 20/100 Cross</span>
+                            <span class="fw-bold text-white" id="c20100-total-return" style="font-size: 0.85rem;">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-1" style="font-size: 0.75rem;">
+                            <span class="text-muted">Wealth: <strong id="c20100-final-wealth" class="text-light">$0</strong></span>
+                            <span>CAGR: <strong id="c20100-cagr" class="text-light">--</strong></span>
+                            <span>MDD: <strong id="c20100-mdd" class="text-danger">--</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. 50/100 Cross -->
+                <div class="col-xl col-md-4">
+                    <div class="card strategy-card h-100" style="border-left-color: #c2410c;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-uppercase fw-bold text-warning" style="font-size: 0.7rem;">3. 50/100 Cross</span>
+                            <span class="fw-bold text-white" id="c50100-total-return" style="font-size: 0.85rem;">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-1" style="font-size: 0.75rem;">
+                            <span class="text-muted">Wealth: <strong id="c50100-final-wealth" class="text-light">$0</strong></span>
+                            <span>CAGR: <strong id="c50100-cagr" class="text-light">--</strong></span>
+                            <span>MDD: <strong id="c50100-mdd" class="text-danger">--</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Classic 50/200 Cross -->
+                <div class="col-xl col-md-4">
+                    <div class="card strategy-card h-100" style="border-left-color: #ca8a04;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-uppercase fw-bold text-warning" style="font-size: 0.7rem;">4. 50/200 Cross</span>
+                            <span class="fw-bold text-white" id="c50200-total-return" style="font-size: 0.85rem;">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-1" style="font-size: 0.75rem;">
+                            <span class="text-muted">Wealth: <strong id="c50200-final-wealth" class="text-light">$0</strong></span>
+                            <span>CAGR: <strong id="c50200-cagr" class="text-light">--</strong></span>
+                            <span>MDD: <strong id="c50200-mdd" class="text-danger">--</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. Empirical Velocity Model -->
+                <div class="col-xl col-md-4">
+                    <div class="card strategy-card h-100" style="border-left-color: #10b981; background-color: rgba(16, 185, 129, 0.05);">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-uppercase fw-bold text-success" style="font-size: 0.7rem;">5. Empirical Model</span>
+                            <span class="fw-bold text-white" id="opt-total-return" style="font-size: 0.85rem;">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-1" style="font-size: 0.75rem;">
+                            <span class="text-muted">Wealth: <strong id="opt-final-wealth" class="text-light">$0</strong></span>
+                            <span>CAGR: <strong id="opt-cagr" class="text-light">--</strong></span>
+                            <span>MDD: <strong id="opt-mdd" class="text-danger">--</strong></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Chart Section (Height set to 936px - 90% of 1040px) -->
+        <div class="card mb-3 p-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+                <h6 class="card-title text-light mb-0 fw-bold">Unified 0-to-Max Absolute Scaling (Corrected Legends & Axes)</h6>
+                <div class="btn-toolbar gap-2 mt-2 mt-md-0" role="toolbar">
+                    <div class="btn-group btn-group-sm me-2" role="group">
+                        <button type="button" class="btn btn-outline-info py-0 px-2" onclick="resetZoom()" style="font-size: 0.75rem;">Reset Zoom</button>
+                    </div>
+                    <div class="btn-group btn-group-sm me-2" role="group">
+                        <button type="button" class="btn btn-outline-secondary py-0 px-2 active" id="btn-max" onclick="setTimeframe('MAX', this)" style="font-size: 0.75rem;">Max</button>
+                        <button type="button" class="btn btn-outline-secondary py-0 px-2" onclick="setTimeframe('10Y', this)" style="font-size: 0.75rem;">10Y</button>
+                        <button type="button" class="btn btn-outline-secondary py-0 px-2" onclick="setTimeframe('5Y', this)" style="font-size: 0.75rem;">5Y</button>
+                        <button type="button" class="btn btn-outline-secondary py-0 px-2" onclick="setTimeframe('1Y', this)" style="font-size: 0.75rem;">1Y</button>
+                    </div>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-primary py-0 px-2 active" id="btn-linear" onclick="toggleScale('linear', this)" style="font-size: 0.75rem;">Linear</button>
+                        <button type="button" class="btn btn-outline-primary py-0 px-2" id="btn-log" onclick="toggleScale('logarithmic', this)" style="font-size: 0.75rem;">Log</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Canvas Container Height: 936px -->
+            <div class="chart-container-white" style="position: relative; height: 936px; width: 100%;">
+                <canvas id="spChart"></canvas>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mt-2 small text-muted px-2" style="font-size: 0.75rem;">
+                <div class="d-flex gap-3 flex-wrap align-items-center">
+                    <span><span style="color: #000000; font-weight: bold;">—</span> S&P Price</span>
+                    <span><span style="color: #10b981; font-weight: bold;">—</span> Empirical Model ($)</span>
+                    <span><span style="color: rgba(14, 165, 233, 0.45); font-weight: bold;">—</span> Velocity ($V_{320}$)</span>
+                </div>
+                <div>💡 <em>Tip: Sticky hover enabled — move cursor across the chart to inspect index and 4-decimal velocity values.</em></div>
+            </div>
+        </div>
+
+        <!-- Crossover Log & Risk Ensemble -->
+        <div class="row g-3">
+            <div class="col-xl-8">
+                <div class="card p-3 h-100">
+                    <h6 class="card-title text-light mb-2 fw-bold">Historical Crossover Log & True Forward Returns</h6>
+                    <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                        <table class="table table-custom table-hover align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>S&P 500 Level</th>
+                                    <th>1M Return</th>
+                                    <th>6M Return</th>
+                                    <th>1Yr Return</th>
+                                </tr>
+                            </thead>
+                            <tbody id="crossover-table-body">
+                                <tr><td colspan="6" class="text-center text-muted py-3">Loading historical records...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-4">
+                <div class="card p-3 h-100">
+                    <h6 class="card-title text-light mb-2 fw-bold">50-Indicator Dynamic Risk Ensemble</h6>
+                    <p class="small text-muted mb-2" style="font-size: 0.75rem;">Weighing macro, liquidity, sentiment, and volatility components.</p>
+                    
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between small mb-1" style="font-size: 0.7rem;">
+                            <span>Volatility Microstructure (VIX / Skew)</span>
+                            <span class="text-warning">64% (Elevated)</span>
+                        </div>
+                        <div class="progress"><div class="progress-bar bg-warning" style="width: 64%"></div></div>
+                    </div>
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between small mb-1" style="font-size: 0.7rem;">
+                            <span>Credit Spreads & Liquidity (HY OAS)</span>
+                            <span class="text-success">38% (Normal)</span>
+                        </div>
+                        <div class="progress"><div class="progress-bar bg-success" style="width: 38%"></div></div>
+                    </div>
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between small mb-1" style="font-size: 0.7rem;">
+                            <span>Technical Momentum (SMA / RSI)</span>
+                            <span class="text-success">72% (Strong)</span>
+                        </div>
+                        <div class="progress"><div class="progress-bar bg-success" style="width: 72%"></div></div>
+                    </div>
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between small mb-1" style="font-size: 0.7rem;">
+                            <span>Investor Sentiment (AAII / P/C Ratio)</span>
+                            <span class="text-warning">55% (Neutral)</span>
+                        </div>
+                        <div class="progress"><div class="progress-bar bg-warning" style="width: 55%"></div></div>
+                    </div>
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between small mb-1" style="font-size: 0.7rem;">
+                            <span>Macro Surprises & ISM PMI</span>
+                            <span class="text-info">82% (Expansion)</span>
+                        </div>
+                        <div class="progress"><div class="progress-bar bg-info" style="width: 82%"></div></div>
+                    </div>
+
+                    <div class="alert alert-secondary bg-dark border-secondary small mt-2 mb-0 py-1 px-2" style="font-size: 0.75rem;">
+                        <strong>Ensemble Signal:</strong> Neutral-Bullish bias.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        let spChart;
+        let globalDataset = [];
+        let globalStartIdx = 320;
+        let globalCrossovers = [];
+
+        async function initDashboard() {
+            try {
+                const workerBase = "https://spring-surf-392e.justusverhagen.workers.dev/";
+                const spResp = await fetch(workerBase);
+                if (!spResp.ok) throw new Error("Failed to fetch S&P 500 stream");
+                
+                const spCsv = await spResp.text();
+                const lines = spCsv.trim().split('\n');
+                globalDataset = [];
+
+                for (let i = 1; i < lines.length; i++) {
+                    const cols = lines[i].split(',');
+                    if (cols.length >= 5) {
+                        const dStr = cols[0].trim();
+                        const date = new Date(dStr);
+                        const price = parseFloat(cols[4].trim());
+
+                        if (!isNaN(date.getTime()) && !isNaN(price) && price > 0) {
+                            globalDataset.push({ date: date, dateStr: dStr, price: price });
+                        }
+                    }
+                }
+
+                globalDataset.sort((a, b) => a.date - b.date);
+                if (globalDataset.length === 0) throw new Error("No valid price records parsed");
+
+                document.getElementById('feed-status').className = 'badge bg-success bg-opacity-15 text-success border border-success px-3 py-1';
+                document.getElementById('feed-status').innerText = `Live Daily Stream (${globalDataset.length.toLocaleString()} Days)`;
+                document.getElementById('feed-subtitle').innerText = `Direct Exchange Feed • ${globalDataset[0].dateStr} to ${globalDataset[globalDataset.length-1].dateStr}`;
+
+                // Calculate SMAs
+                for (let i = 0; i < globalDataset.length; i++) {
+                    if (i >= 4) { let sum = 0; for (let j = i - 4; j <= i; j++) sum += globalDataset[j].price; globalDataset[i].sma5 = sum / 5; } else { globalDataset[i].sma5 = null; }
+                    if (i >= 19) { let sum = 0; for (let j = i - 19; j <= i; j++) sum += globalDataset[j].price; globalDataset[i].sma20 = sum / 20; } else { globalDataset[i].sma20 = null; }
+                    if (i >= 49) { let sum = 0; for (let j = i - 49; j <= i; j++) sum += globalDataset[j].price; globalDataset[i].sma50 = sum / 50; } else { globalDataset[i].sma50 = null; }
+                    if (i >= 79) { let sum = 0; for (let j = i - 79; j <= i; j++) sum += globalDataset[j].price; globalDataset[i].sma80 = sum / 80; } else { globalDataset[i].sma80 = null; }
+                    if (i >= 99) { let sum = 0; for (let j = i - 99; j <= i; j++) sum += globalDataset[j].price; globalDataset[i].sma100 = sum / 100; } else { globalDataset[i].sma100 = null; }
+                    if (i >= 199) { let sum = 0; for (let j = i - 199; j <= i; j++) sum += globalDataset[j].price; globalDataset[i].sma200 = sum / 200; } else { globalDataset[i].sma200 = null; }
+                    if (i >= 319) { let sum = 0; for (let j = i - 319; j <= i; j++) sum += globalDataset[j].price; globalDataset[i].sma320 = sum / 320; } else { globalDataset[i].sma320 = null; }
+                }
+
+                // Compute Velocities
+                let v5Vals = [], v20Vals = [], v80Vals = [], v320Vals = [];
+                for (let i = 1; i < globalDataset.length; i++) {
+                    const d = globalDataset[i];
+                    const prev = globalDataset[i-1];
+                    d.v5 = (d.sma5 && prev.sma5) ? (d.sma5 - prev.sma5) / prev.sma5 : null;
+                    d.v20 = (d.sma20 && prev.sma20) ? (d.sma20 - prev.sma20) / prev.sma20 : null;
+                    d.v80 = (d.sma80 && prev.sma80) ? (d.sma80 - prev.sma80) / prev.sma80 : null;
+                    d.v320 = (d.sma320 && prev.sma320) ? (d.sma320 - prev.sma320) / prev.sma320 : null;
+
+                    if (d.v5 !== null) v5Vals.push(d.v5);
+                    if (d.v20 !== null) v20Vals.push(d.v20);
+                    if (d.v80 !== null) v80Vals.push(d.v80);
+                    if (d.v320 !== null) v320Vals.push(d.v320);
+                }
+
+                const stats = {
+                    v5: { min: Math.min(...v5Vals), max: Math.max(...v5Vals) },
+                    v20: { min: Math.min(...v20Vals), max: Math.max(...v20Vals) },
+                    v80: { min: Math.min(...v80Vals), max: Math.max(...v80Vals) },
+                    v320: { min: Math.min(...v320Vals), max: Math.max(...v320Vals) }
+                };
+
+                configureSlider('v5entry', stats.v5.min, stats.v5.max, 0.00001, 0.0);
+                configureSlider('v20entry', stats.v20.min, stats.v20.max, 0.00001, 0.0);
+                configureSlider('v80entry', stats.v80.min, stats.v80.max, 0.00001, 0.0);
+                configureSlider('v320entry', stats.v320.min, stats.v320.max, 0.00001, 0.0);
+
+                configureSlider('v5exit', stats.v5.min, stats.v5.max, 0.00001, -0.001);
+                configureSlider('v20exit', stats.v20.min, stats.v20.max, 0.00001, -0.0005);
+                configureSlider('v80exit', stats.v80.min, stats.v80.max, 0.00001, -0.0003);
+                configureSlider('v320exit', stats.v320.min, stats.v320.max, 0.00001, -0.0002);
+
+                updateGlobalStartIdx();
+
+                globalCrossovers = [];
+                for (let i = 320; i < globalDataset.length; i++) {
+                    const prev = globalDataset[i-1];
+                    const curr = globalDataset[i];
+                    if (prev.sma50 && prev.sma200 && curr.sma50 && curr.sma200) {
+                        if (prev.sma50 <= prev.sma200 && curr.sma50 > curr.sma200) {
+                            globalCrossovers.push({ index: i, date: curr.date, dateStr: curr.dateStr, type: 'Golden', price: curr.price });
+                        } else if (prev.sma50 >= prev.sma200 && curr.sma50 < curr.sma200) {
+                            globalCrossovers.push({ index: i, date: curr.date, dateStr: curr.dateStr, type: 'Death', price: curr.price });
+                        }
+                    }
+                }
+
+                const tableBody = document.getElementById('crossover-table-body');
+                tableBody.innerHTML = '';
+                const recentCrosses = [...globalCrossovers].reverse().slice(0, 40);
+                
+                recentCrosses.forEach(c => {
+                    const badgeClass = c.type === 'Golden' ? 'badge-golden' : 'badge-death';
+                    const getRet = (offset) => {
+                        if (c.index + offset < globalDataset.length) {
+                            const futurePrice = globalDataset[c.index + offset].price;
+                            const pct = ((futurePrice - c.price) / c.price) * 100;
+                            return (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
+                        }
+                        return 'N/A';
+                    };
+
+                    const row = document.createElement('tr');
+                    row.className = 'clickable-row';
+                    row.title = 'Click to auto-zoom chart to this crossover event';
+                    row.onclick = () => zoomToDate(c.date);
+                    row.innerHTML = `
+                        <td>${c.dateStr}</td>
+                        <td><span class="badge ${badgeClass}">${c.type} Cross</span></td>
+                        <td>$${c.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="${getRet(21).startsWith('+') ? 'text-success' : 'text-danger'}">${getRet(21)}</td>
+                        <td class="${getRet(126).startsWith('+') ? 'text-success' : 'text-danger'}">${getRet(126)}</td>
+                        <td class="${getRet(252).startsWith('+') ? 'text-success' : 'text-danger'}">${getRet(252)}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+
+                rebuildChartAndBacktest();
+
+            } catch (err) {
+                console.error("Dashboard error caught:", err);
+                document.getElementById('feed-status').className = 'badge bg-danger px-3 py-1';
+                document.getElementById('feed-status').innerText = 'Data Stream Offline';
+            }
+        }
+
+        function updateGlobalStartIdx() {
+            const selectEl = document.getElementById('start-year-select');
+            const targetYear = selectEl ? parseInt(selectEl.value, 10) : 1997;
+            globalStartIdx = 320;
+            for (let i = 320; i < globalDataset.length; i++) {
+                if (globalDataset[i].date.getFullYear() >= targetYear) {
+                    globalStartIdx = i;
+                    break;
+                }
+            }
+        }
+
+        function onStartYearChange() {
+            updateGlobalStartIdx();
+            rebuildChartAndBacktest();
+            if (spChart) {
+                spChart.options.scales.x.min = globalDataset[globalStartIdx].date;
+                spChart.update();
+            }
+        }
+
+        function configureSlider(id, minVal, maxVal, stepVal, defaultVal) {
+            const slider = document.getElementById(`slider-${id}`);
+            if (!slider) return;
+            slider.min = minVal;
+            slider.max = maxVal;
+            slider.step = stepVal;
+            const clamped = Math.max(minVal, Math.min(maxVal, defaultVal));
+            slider.value = clamped;
+        }
+
+        function stepSlider(id, direction) {
+            const slider = document.getElementById(`slider-${id}`);
+            if (!slider) return;
+            const step = parseFloat(slider.step) || 1;
+            const currentVal = parseFloat(slider.value);
+            let newVal = currentVal + (direction * step);
+            const min = parseFloat(slider.min);
+            const max = parseFloat(slider.max);
+            newVal = Math.max(min, Math.min(max, newVal));
+            slider.value = newVal;
+            onSliderChange();
+        }
+
+        function updateSwitchLabels() {
+            const keys = ['v5entry', 'v20entry', 'v80entry', 'v320entry', 'v5exit', 'v20exit', 'v80exit', 'v320exit'];
+            keys.forEach(k => {
+                const el = document.getElementById(`logic-${k}`);
+                if (!el) return;
+                const isChecked = el.checked;
+                const lbl = document.getElementById(`lbl-logic-${k}`);
+                if (lbl) {
+                    lbl.innerText = isChecked ? 'AND' : 'OR';
+                    lbl.className = `form-check-input-label small fw-bold ${isChecked ? 'text-info' : 'text-warning'}`;
+                }
+            });
+        }
+
+        function onSliderChange() {
+            updateSwitchLabels();
+
+            const keys = ['v5entry', 'v20entry', 'v80entry', 'v320entry', 'v5exit', 'v20exit', 'v80exit', 'v320exit'];
+            keys.forEach(k => {
+                const slider = document.getElementById(`slider-${k}`);
+                const el = document.getElementById(`val-${k}`);
+                if (slider && el) {
+                    el.innerText = parseFloat(slider.value).toFixed(5);
+                }
+            });
+
+            const minInSlider = document.getElementById('slider-minin');
+            const minInValEl = document.getElementById('val-minin');
+            if (minInSlider && minInValEl) {
+                minInValEl.innerText = minInSlider.value;
+            }
+
+            const minOutSlider = document.getElementById('slider-minout');
+            const minOutValEl = document.getElementById('val-minout');
+            if (minOutSlider && minOutValEl) {
+                minOutValEl.innerText = minOutSlider.value;
+            }
+
+            rebuildChartAndBacktest();
+        }
+
+        function rebuildChartAndBacktest() {
+            const params = {
+                v5entry: parseFloat(document.getElementById('slider-v5entry').value),
+                v20entry: parseFloat(document.getElementById('slider-v20entry').value),
+                v80entry: parseFloat(document.getElementById('slider-v80entry').value),
+                v320entry: parseFloat(document.getElementById('slider-v320entry').value),
+                
+                v5exit: parseFloat(document.getElementById('slider-v5exit').value),
+                v20exit: parseFloat(document.getElementById('slider-v20exit').value),
+                v80exit: parseFloat(document.getElementById('slider-v80exit').value),
+                v320exit: parseFloat(document.getElementById('slider-v320exit').value),
+
+                minInDays: parseInt(document.getElementById('slider-minin').value, 10),
+                minOutDays: parseInt(document.getElementById('slider-minout').value, 10),
+
+                activeV5entry: document.getElementById('active-v5entry').checked,
+                activeV20entry: document.getElementById('active-v20entry').checked,
+                activeV80entry: document.getElementById('active-v80entry').checked,
+                activeV320entry: document.getElementById('active-v320entry').checked,
+
+                activeV5exit: document.getElementById('active-v5exit').checked,
+                activeV20exit: document.getElementById('active-v20exit').checked,
+                activeV80exit: document.getElementById('active-v80exit').checked,
+                activeV320exit: document.getElementById('active-v320exit').checked,
+
+                logicV5entry: document.getElementById('logic-v5entry').checked ? 'AND' : 'OR',
+                logicV20entry: document.getElementById('logic-v20entry').checked ? 'AND' : 'OR',
+                logicV80entry: document.getElementById('logic-v80entry').checked ? 'AND' : 'OR',
+                logicV320entry: document.getElementById('logic-v320entry').checked ? 'AND' : 'OR',
+
+                logicV5exit: document.getElementById('logic-v5exit').checked ? 'AND' : 'OR',
+                logicV20exit: document.getElementById('logic-v20exit').checked ? 'AND' : 'OR',
+                logicV80exit: document.getElementById('logic-v80exit').checked ? 'AND' : 'OR',
+                logicV320exit: document.getElementById('logic-v320exit').checked ? 'AND' : 'OR'
+            };
+
+            const backtestResult = runBacktestAndRegimes(globalDataset, globalStartIdx, params);
+
+            const latest = globalDataset[globalDataset.length - 1];
+            document.getElementById('kpi-price').innerText = `$${latest.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('kpi-v5').innerText = `${((latest.v5 || 0)*100).toFixed(3)}%`;
+            document.getElementById('kpi-v320').innerText = `${((latest.v320 || 0)*100).toFixed(3)}%`;
+            
+            const isOptIn = backtestResult.latestInMarket;
+            document.getElementById('kpi-regime').innerText = isOptIn ? 'In Market (Risk-On)' : 'Out of Market (Cash)';
+            document.getElementById('kpi-regime').className = `h5 fw-bold mt-1 mb-0 ${isOptIn ? 'text-success' : 'text-danger'}`;
+
+            const annotationsObj = {
+                zeroLine: {
+                    type: 'line',
+                    yScaleID: 'yDeriv',
+                    yMin: 0,
+                    yMax: 0,
+                    borderColor: '#000000',
+                    borderWidth: 2,
+                    borderDash: [4, 4]
+                }
+            };
+
+            backtestResult.ranges.forEach((r, idx) => {
+                annotationsObj[`regimeBox_${idx}`] = {
+                    type: 'box',
+                    xMin: r.start,
+                    xMax: r.end,
+                    backgroundColor: r.status === 'in' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.12)',
+                    borderWidth: 0
+                };
+            });
+
+            if (spChart) {
+                spChart.data.datasets[5].data = backtestResult.holdStream;
+                spChart.data.datasets[6].data = backtestResult.c20100Stream;
+                spChart.data.datasets[7].data = backtestResult.c50100Stream;
+                spChart.data.datasets[8].data = backtestResult.c50200Stream;
+                spChart.data.datasets[9].data = backtestResult.optStream;
+                spChart.options.plugins.annotation.annotations = annotationsObj;
+                spChart.update();
+            } else {
+                const chartData = globalDataset.map(d => ({ x: d.date, y: d.price }));
+                const v5Data = globalDataset.map(d => ({ x: d.date, y: d.v5 }));
+                const v20Data = globalDataset.map(d => ({ x: d.date, y: d.v20 }));
+                const v80Data = globalDataset.map(d => ({ x: d.date, y: d.v80 }));
+                const v320Data = globalDataset.map(d => ({ x: d.date, y: d.v320 }));
+                const goldenPoints = globalCrossovers.filter(c => c.type === 'Golden').map(c => ({ x: c.date, y: c.price }));
+                const deathPoints = globalCrossovers.filter(c => c.type === 'Death').map(c => ({ x: c.date, y: c.price }));
+
+                const ctx = document.getElementById('spChart').getContext('2d');
+                spChart = new Chart(ctx, {
+                    data: {
+                        datasets: [
+                            { type: 'line', label: 'S&P 500 Price', yAxisID: 'yPrice', data: chartData, borderColor: '#000000', borderWidth: 2, pointRadius: 0, tension: 0.1 },
+                            { type: 'line', label: 'Velocity (V5)', yAxisID: 'yDeriv', data: v5Data, borderColor: 'rgba(37, 99, 235, 0.45)', borderWidth: 1.5, pointRadius: 0, tension: 0.1 },
+                            { type: 'line', label: 'Velocity (V20)', yAxisID: 'yDeriv', data: v20Data, borderColor: 'rgba(217, 119, 6, 0.45)', borderWidth: 1.5, pointRadius: 0, tension: 0.1 },
+                            { type: 'line', label: 'Velocity (V80)', yAxisID: 'yDeriv', data: v80Data, borderColor: 'rgba(147, 51, 234, 0.45)', borderWidth: 1.5, pointRadius: 0, tension: 0.1 },
+                            { type: 'line', label: 'Velocity (V320)', yAxisID: 'yDeriv', data: v320Data, borderColor: 'rgba(14, 165, 233, 0.45)', borderWidth: 1.5, pointRadius: 0, tension: 0.1 },
+                            { type: 'line', label: 'Buy & Hold ($)', yAxisID: 'yPrice', data: backtestResult.holdStream, borderColor: '#0284c7', borderWidth: 1.5, borderDash: [2, 2], pointRadius: 0 },
+                            { type: 'line', label: 'Classic 20/100 ($)', yAxisID: 'yPrice', data: backtestResult.c20100Stream, borderColor: '#d97706', borderWidth: 1.5, pointRadius: 0 },
+                            { type: 'line', label: 'Classic 50/100 ($)', yAxisID: 'yPrice', data: backtestResult.c50100Stream, borderColor: '#c2410c', borderWidth: 1.5, pointRadius: 0 },
+                            { type: 'line', label: 'Classic 50/200 ($)', yAxisID: 'yPrice', data: backtestResult.c50200Stream, borderColor: '#ca8a04', borderWidth: 1.5, pointRadius: 0 },
+                            { type: 'line', label: 'Empirical Model ($)', yAxisID: 'yPrice', data: backtestResult.optStream, borderColor: '#10b981', borderWidth: 2.5, pointRadius: 0 },
+                            { type: 'scatter', label: 'Golden Cross', yAxisID: 'yPrice', data: goldenPoints, backgroundColor: '#10b981', borderColor: '#ffffff', borderWidth: 2.5, pointRadius: 8 },
+                            { type: 'scatter', label: 'Death Cross', yAxisID: 'yPrice', data: deathPoints, backgroundColor: '#ef4444', borderColor: '#ffffff', borderWidth: 2.5, pointRadius: 8 }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        scales: {
+                            x: { type: 'time', time: { unit: 'year' }, grid: { color: 'rgba(0, 0, 0, 0.08)' }, ticks: { color: '#334155' } },
+                            yPrice: { 
+                                type: 'linear', 
+                                position: 'left',
+                                min: 0,
+                                title: { display: true, text: 'Absolute Value ($ / Index Level)', color: '#1e40af' },
+                                grid: { color: 'rgba(0, 0, 0, 0.08)' }, 
+                                ticks: { 
+                                    color: '#334155',
+                                    callback: (val) => val >= 1000 ? '$' + (val/1000).toFixed(0) + 'k' : '$' + val
+                                }
+                            },
+                            yDeriv: {
+                                type: 'linear',
+                                position: 'right',
+                                title: { display: true, text: 'Transparent Velocities (V5, V20, V80, V320)', color: '#2563eb' },
+                                grid: { drawOnChartArea: false },
+                                ticks: { color: '#334155', callback: (val) => (val * 100).toFixed(2) + '%' }
+                            }
+                        },
+                        plugins: {
+                            legend: { labels: { color: '#1e293b', boxWidth: 12 } },
+                            tooltip: {
+                                enabled: true,
+                                mode: 'index',
+                                intersect: false,
+                                backgroundColor: 'rgba(17, 24, 39, 0.95)',
+                                titleColor: '#38bdf8',
+                                bodyColor: '#e2e8f0',
+                                borderColor: '#374151',
+                                borderWidth: 1,
+                                padding: 10,
+                                displayColors: true,
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        const val = context.parsed.y;
+                                        if (label.includes('Velocity')) {
+                                            return label + (val !== null && val !== undefined ? val.toFixed(4) : 'N/A');
+                                        } else if (label.includes('$') || label.includes('Price') || label.includes('Model') || label.includes('Hold')) {
+                                            return label + (val >= 1000 ? '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : val.toFixed(2));
+                                        }
+                                        return label + val;
+                                    }
+                                }
+                            },
+                            annotation: { annotations: annotationsObj },
+                            zoom: {
+                                pan: { enabled: true, mode: 'x' },
+                                zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        function evaluateRule(conds, activeFlags, ops, defaultIfNone) {
+            let activeConds = [];
+            let activeOps = [];
+            for (let i = 0; i < conds.length; i++) {
+                if (activeFlags[i]) {
+                    activeConds.push(conds[i]);
+                    activeOps.push(ops[i]);
+                }
+            }
+            if (activeConds.length === 0) return defaultIfNone;
+            let result = activeConds[0];
+            for (let i = 1; i < activeConds.length; i++) {
+                const op = activeOps[i];
+                if (op === 'AND') result = result && activeConds[i];
+                else result = result || activeConds[i];
+            }
+            return result;
+        }
+
+        function runBacktestAndRegimes(dataset, startIdx, params) {
+            const initialPrice = dataset[startIdx].price;
+
+            let holdEq = initialPrice, maxHoldEq = initialPrice, maxHoldDD = 0;
+            let c20100Eq = initialPrice, maxC20100Eq = initialPrice, maxC20100DD = 0;
+            let c50100Eq = initialPrice, maxC50100Eq = initialPrice, maxC50100DD = 0;
+            let c50200Eq = initialPrice, maxC50200Eq = initialPrice, maxC50200DD = 0;
+            let optEq = initialPrice, maxOptEq = initialPrice, maxOptDD = 0;
+
+            let c20100InMarket = true;
+            let c50100InMarket = true;
+            let c50200InMarket = true;
+            let optInMarket = true;
+            let daysInCurrentState = 0;
+
+            const holdStream = [];
+            const c20100Stream = [];
+            const c50100Stream = [];
+            const c50200Stream = [];
+            const optStream = [];
+            const ranges = [];
+            
+            let currentRangeStart = dataset[startIdx].dateStr;
+            let currentStatus = 'in';
+
+            for (let i = startIdx; i < dataset.length; i++) {
+                if (i === startIdx) {
+                    holdStream.push({ x: dataset[i].date, y: initialPrice });
+                    c20100Stream.push({ x: dataset[i].date, y: initialPrice });
+                    c50100Stream.push({ x: dataset[i].date, y: initialPrice });
+                    c50200Stream.push({ x: dataset[i].date, y: initialPrice });
+                    optStream.push({ x: dataset[i].date, y: initialPrice });
+                    continue;
+                }
+
+                const prev = dataset[i-1];
+                const curr = dataset[i];
+                const dailyRet = (curr.price - prev.price) / prev.price;
+
+                // 1. Buy & Hold
+                holdEq *= (1 + dailyRet);
+                if (holdEq > maxHoldEq) maxHoldEq = holdEq;
+                const hDD = (maxHoldEq - holdEq) / maxHoldEq;
+                if (hDD > maxHoldDD) maxHoldDD = hDD;
+                holdStream.push({ x: curr.date, y: holdEq });
+
+                // 2. Classic 20/100 Cross
+                if (prev.sma20 && prev.sma100) {
+                    if (prev.sma20 <= prev.sma100) c20100InMarket = false;
+                    else if (prev.sma20 >= prev.sma100) c20100InMarket = true;
+                }
+                if (c20100InMarket) c20100Eq *= (1 + dailyRet);
+                if (c20100Eq > maxC20100Eq) maxC20100Eq = c20100Eq;
+                const c20100DD = (maxC20100Eq - c20100Eq) / maxC20100Eq;
+                if (c20100DD > maxC20100DD) maxC20100DD = c20100DD;
+                c20100Stream.push({ x: curr.date, y: c20100Eq });
+
+                // 3. Classic 50/100 Cross
+                if (prev.sma50 && prev.sma100) {
+                    if (prev.sma50 <= prev.sma100) c50100InMarket = false;
+                    else if (prev.sma50 >= prev.sma100) c50100InMarket = true;
+                }
+                if (c50100InMarket) c50100Eq *= (1 + dailyRet);
+                if (c50100Eq > maxC50100Eq) maxC50100Eq = c50100Eq;
+                const c50100DD = (maxC50100Eq - c50100Eq) / maxC50100Eq;
+                if (c50100DD > maxC50100DD) maxC50100DD = c50100DD;
+                c50100Stream.push({ x: curr.date, y: c50100Eq });
+
+                // 4. Classic 50/200 Cross
+                if (prev.sma50 && prev.sma200) {
+                    if (prev.sma50 <= prev.sma200) c50200InMarket = false;
+                    else if (prev.sma50 >= prev.sma200) c50200InMarket = true;
+                }
+                if (c50200InMarket) c50200Eq *= (1 + dailyRet);
+                if (c50200Eq > maxC50200Eq) maxC50200Eq = c50200Eq;
+                const c50200DD = (maxC50200Eq - c50200Eq) / maxC50200Eq;
+                if (c50200DD > maxC50200DD) maxC50200DD = c50200DD;
+                c50200Stream.push({ x: curr.date, y: c50200Eq });
+
+                // 5. Empirical Dynamic Model Logic with Min In & Min Out Durations
+                if (prev.v5 !== null && prev.v20 !== null && prev.v80 !== null && prev.v320 !== null) {
+                    const entryConds = [
+                        prev.v5 > params.v5entry,
+                        prev.v20 > params.v20entry,
+                        prev.v80 > params.v80entry,
+                        prev.v320 > params.v320entry
+                    ];
+                    const entryActive = [params.activeV5entry, params.activeV20entry, params.activeV80entry, params.activeV320entry];
+                    const entryOps = ['AND', params.logicV20entry, params.logicV80entry, params.logicV320entry];
+                    const entryCondition = evaluateRule(entryConds, entryActive, entryOps, false);
+
+                    const exitConds = [
+                        prev.v5 < params.v5exit,
+                        prev.v20 < params.v20exit,
+                        prev.v80 < params.v80exit,
+                        prev.v320 < params.v320exit
+                    ];
+                    const exitActive = [params.activeV5exit, params.activeV20exit, params.activeV80exit, params.activeV320exit];
+                    const exitOps = ['OR', params.logicV20exit, params.logicV80exit, params.logicV320exit];
+                    const exitCondition = evaluateRule(exitConds, exitActive, exitOps, false);
+
+                    daysInCurrentState++;
+
+                    if (!optInMarket) {
+                        if (entryCondition && daysInCurrentState >= params.minOutDays) {
+                            optInMarket = true;
+                            daysInCurrentState = 0;
+                            if (currentStatus !== 'in') {
+                                ranges.push({ start: currentRangeStart, end: prev.dateStr, status: currentStatus });
+                                currentRangeStart = prev.dateStr;
+                                currentStatus = 'in';
+                            }
+                        }
+                    } else {
+                        if (exitCondition && daysInCurrentState >= params.minInDays) {
+                            optInMarket = false;
+                            daysInCurrentState = 0;
+                            if (currentStatus !== 'out') {
+                                ranges.push({ start: currentRangeStart, end: prev.dateStr, status: currentStatus });
+                                currentRangeStart = prev.dateStr;
+                                currentStatus = 'out';
+                            }
+                        }
+                    }
+                }
+
+                if (optInMarket) optEq *= (1 + dailyRet);
+                if (optEq > maxOptEq) maxOptEq = optEq;
+                const optDD = (maxOptEq - optEq) / maxOptEq;
+                if (optDD > maxOptDD) maxOptDD = optDD;
+                optStream.push({ x: curr.date, y: optEq });
+            }
+
+            ranges.push({ start: currentRangeStart, end: dataset[dataset.length - 1].dateStr, status: currentStatus });
+
+            const years = (dataset[dataset.length - 1].date - dataset[startIdx].date) / (1000 * 60 * 60 * 24 * 365.25);
+            const getMetrics = (eq, maxDD) => {
+                const totRet = ((eq - initialPrice) / initialPrice) * 100;
+                const cagr = (Math.pow(eq / initialPrice, 1 / years) - 1) * 100;
+                return { totRet, cagr, mdd: maxDD * 100 };
+            };
+
+            const holdM = getMetrics(holdEq, maxHoldDD);
+            const c20100M = getMetrics(c20100Eq, maxC20100DD);
+            const c50100M = getMetrics(c50100Eq, maxC50100DD);
+            const c50200M = getMetrics(c50200Eq, maxC50200DD);
+            const optM = getMetrics(optEq, maxOptDD);
+
+            document.getElementById('backtest-span').innerText = `${years.toFixed(1)} Years (${dataset[startIdx].date.getFullYear()}–Present)`;
+
+            document.getElementById('hold-total-return').innerText = `+${holdM.totRet.toFixed(1)}%`;
+            document.getElementById('hold-final-wealth').innerText = `$${Math.round(holdEq).toLocaleString()}`;
+            document.getElementById('hold-cagr').innerText = `${holdM.cagr.toFixed(2)}%`;
+            document.getElementById('hold-mdd').innerText = `-${holdM.mdd.toFixed(1)}%`;
+
+            document.getElementById('c20100-total-return').innerText = `+${c20100M.totRet.toFixed(1)}%`;
+            document.getElementById('c20100-final-wealth').innerText = `$${Math.round(c20100Eq).toLocaleString()}`;
+            document.getElementById('c20100-cagr').innerText = `${c20100M.cagr.toFixed(2)}%`;
+            document.getElementById('c20100-mdd').innerText = `-${c20100M.mdd.toFixed(1)}%`;
+
+            document.getElementById('c50100-total-return').innerText = `+${c50100M.totRet.toFixed(1)}%`;
+            document.getElementById('c50100-final-wealth').innerText = `$${Math.round(c50100Eq).toLocaleString()}`;
+            document.getElementById('c50100-cagr').innerText = `${c50100M.cagr.toFixed(2)}%`;
+            document.getElementById('c50100-mdd').innerText = `-${c50100M.mdd.toFixed(1)}%`;
+
+            document.getElementById('c50200-total-return').innerText = `+${c50200M.totRet.toFixed(1)}%`;
+            document.getElementById('c50200-final-wealth').innerText = `$${Math.round(c50200Eq).toLocaleString()}`;
+            document.getElementById('c50200-cagr').innerText = `${c50200M.cagr.toFixed(2)}%`;
+            document.getElementById('c50200-mdd').innerText = `-${c50200M.mdd.toFixed(1)}%`;
+
+            document.getElementById('opt-total-return').innerText = `+${optM.totRet.toFixed(1)}%`;
+            document.getElementById('opt-final-wealth').innerText = `$${Math.round(optEq).toLocaleString()}`;
+            document.getElementById('opt-cagr').innerText = `${optM.cagr.toFixed(2)}%`;
+            document.getElementById('opt-mdd').innerText = `-${optM.mdd.toFixed(1)}%`;
+
+            return { holdStream, c20100Stream, c50100Stream, c50200Stream, optStream, ranges, latestInMarket: optInMarket };
+        }
+
+        function zoomToDate(eventDate) {
+            const start = new Date(eventDate);
+            const end = new Date(eventDate);
+            start.setMonth(start.getMonth() - 3);
+            end.setMonth(end.getMonth() + 9);
+            spChart.options.scales.x.min = start;
+            spChart.options.scales.x.max = end;
+            spChart.update();
+        }
+
+        function resetZoom() {
+            spChart.resetZoom();
+            setTimeframe('MAX', document.getElementById('btn-max'));
+        }
+
+        function toggleScale(scaleType, btn) {
+            document.getElementById('btn-linear').classList.remove('active');
+            document.getElementById('btn-log').classList.remove('active');
+            btn.classList.add('active');
+            spChart.options.scales.yPrice.type = scaleType;
+            spChart.update();
+        }
+
+        function setTimeframe(period, btn) {
+            document.querySelectorAll('.btn-group .btn').forEach(b => {
+                if(['Max', '10Y', '5Y', '1Y'].includes(b.textContent.trim())) {
+                    b.classList.remove('active');
+                }
+            });
+            btn.classList.add('active');
+
+            const now = new Date();
+            let start = new Date(now);
+
+            if (period === '1Y') start.setFullYear(now.getFullYear() - 1);
+            else if (period === '5Y') start.setFullYear(now.getFullYear() - 5);
+            else if (period === '10Y') start.setFullYear(now.getFullYear() - 10);
+            else start = globalDataset[globalStartIdx].date;
+
+            spChart.options.scales.x.min = start;
+            spChart.options.scales.x.max = now;
+            spChart.update();
+        }
+
+        window.addEventListener('DOMContentLoaded', initDashboard);
+    </script>
 </body>
 </html>
