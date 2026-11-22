@@ -1,10 +1,1207 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-    <title>HallVirtualizer</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HallVirtualizer by Justus Verhagen</title>
+<style>
+:root{--bg:#111316;--panel:#1a1d22;--line:#2a2f36;--txt:#e6e8eb;--dim:#8b939e;--acc:#5fb3ff;--ok:#4cd07d;--warn:#f0b54a;--bad:#ff5d5d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:13px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif}
+header{display:flex;align-items:baseline;gap:16px;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+h1{font-size:16px;margin:0;font-weight:600}
+#status{color:var(--dim)}
+main{padding:14px 18px;display:grid;gap:14px;max-width:1200px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+section h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);margin:0 0 10px;font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+label{color:var(--dim)}
+select,input[type=number],button,textarea{background:#0e1013;color:var(--txt);border:1px solid var(--line);border-radius:5px;padding:5px 8px;font:inherit}
+button{cursor:pointer} button:hover{border-color:var(--acc)}
+button.primary{background:var(--acc);color:#001424;border-color:var(--acc);font-weight:600}
+input[type=number]{width:70px}
+.note{color:var(--dim);font-size:12px;margin-top:8px}
+.warn{color:var(--warn)} .bad{color:var(--bad)} .ok{color:var(--ok)}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+th,td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{color:var(--dim);font-weight:500;font-size:12px}
+td.name{max-width:280px;overflow:hidden;text-overflow:ellipsis}
+.meter{width:140px;height:10px;background:#0b0c0e;border-radius:2px;position:relative;overflow:hidden}
+.meter>i{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,var(--ok) 0,var(--ok) 70%,var(--warn) 85%,var(--bad) 100%);background-size:140px 100%}
+.meter.clip{outline:1px solid var(--bad)}
+.tog{padding:2px 7px;font-size:11px}
+.tog.m.on{background:var(--bad);color:#000} .tog.s.on{background:var(--warn);color:#000}
+audio{width:100%;max-width:560px;height:36px}
+input[type=range]{width:110px;vertical-align:middle}
+.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+</style>
 </head>
 <body>
-    <h1>HallVirtualizer</h1>
-    <p>Your app goes here.</p>
+<header><h1>HallVirtualizer by Justus Verhagen</h1><span id="status">Pick an output device and start the engine.</span></header>
+<main>
+
+<section>
+  <h2>1 · Output engine</h2>
+  <div class="row">
+    <button id="perm">Show device names</button>
+    <label>Output <select id="outDev"><option value="">System default</option></select></label>
+    <label>Sample rate <select id="sr"><option>44100</option><option>48000</option><option>88200</option><option>96000</option></select></label>
+    <label>Buffer <select id="lat"><option value="playback" selected>Large (most stable)</option><option value="balanced">Medium</option><option value="interactive">Small (lowest latency)</option></select></label>
+    <label>Convolved channels <input id="nch" type="number" min="1" max="22" value="16"></label>
+    <button id="start" class="primary">Start / restart engine</button>
+  </div>
+  <div id="engineInfo" class="note">Engine stopped.</div>
+</section>
+
+<section>
+  <h2>2 · Source</h2>
+  <div class="row">
+    <label><input type="radio" name="mode" value="file" checked> Music folder / file</label>
+    <label><input type="radio" name="mode" value="motu"> MOTU USB input</label>
+    <label><input type="radio" name="mode" value="apple"> Apple Music</label>
+    <label>Input gain <input id="inGain" type="number" value="0" step="1"> dB</label>
+  </div>
+
+  <div class="src" data-mode="file" style="margin-top:10px">
+    <div class="row">
+      <label>Folder <input id="folder" type="file" webkitdirectory multiple></label>
+      <label>or files <input id="music" type="file" multiple accept="audio/*,.flac,.wav,.aif,.aiff,.m4a,.mp3"></label>
+      <label><input id="loopList" type="checkbox" checked> Repeat list</label>
+      <button id="prev" class="tog">◀︎ Prev</button><button id="next" class="tog">Next ▶︎</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <select id="playlist" size="7" style="min-width:360px;max-width:100%"></select>
+    </div>
+    <div class="row" style="margin-top:8px"><audio id="player" controls></audio></div>
+  </div>
+
+  <div class="src" data-mode="motu" style="margin-top:10px" hidden>
+    <div class="row">
+      <label>Device <select id="motuDev"></select></label>
+      <label>Inputs <select id="motuPair"></select></label>
+      <button id="motuGo">Start MOTU input</button>
+    </div>
+    <div class="note">Plays whatever arrives at the chosen MOTU input pair. If Chrome only exposes inputs 1–2, route the pair you want to 1–2 in MOTU's CueMix / web app.</div>
+  </div>
+
+  <div class="src" data-mode="apple" style="margin-top:10px" hidden>
+    <div class="row">
+      <label>Loopback device <select id="loopDev"></select></label>
+      <button id="appleGo">Start Apple Music capture</button>
+    </div>
+    <div class="note">
+      A browser can't tap Apple Music directly, so it goes through a free virtual cable:
+      1) install <b>BlackHole 2ch</b> (existential.audio/blackhole);
+      2) in Audio MIDI Setup set BlackHole to the same sample rate as this app;
+      3) in Apple Music / macOS Sound, set the output to <b>BlackHole 2ch</b> (not the MOTU, or you'll hear it dry as well);
+      4) choose BlackHole here and press Start. Apple Music's own volume slider then acts as the input level.
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>3 · Room impulse responses</h2>
+  <div class="row">
+    <label>Load set <input id="bulk" type="file" multiple accept="audio/*,.wav,.flac,.aif,.aiff"></label>
+    <label>2×N-channel file layout
+      <select id="layout"><option value="pairs">L,R pairs per channel</option><option value="blocks">all L, then all R</option></select></label>
+    <button id="demo">Generate demo RIRs</button>
+    <button id="clear">Clear</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <label>Max IR length <input id="irMax" type="number" value="4" min="0.1" max="20" step="0.1"> s</label>
+    <label><input id="autoTrim" type="checkbox" checked> Trim tail below −80 dB</label>
+    <label><input id="normalize" type="checkbox" checked> Normalize (one common gain, keeps level differences between channels)</label>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <label>Set all high-pass <input id="allHpf" type="number" min="0" max="400" step="5" value="80"> Hz</label><button id="allHpfGo" class="tog">Apply</button>
+    <label>Set all delays <input id="allDel" type="number" min="0" max="20" step="0.5" value="0"> ms</label><button id="allDelGo" class="tog">Apply</button>
+    <span class="note" style="margin:0">High-pass: linear-phase, 48 dB/oct (8th-order, Linkwitz–Riley shape, −6 dB at the cutoff), 20–400 Hz, 0 = off. Az: 0 = stage, 90 = left, 180 = behind, 270 = right. El: + = up.</span>
+  </div>
+  <div class="note">
+    Files are sorted by name and assigned like this:
+    one file per channel → ch 1…N (stereo file = response to the left source + response to the right source; mono file = one response used for both);
+    2×N mono files → consecutive pairs (left-source, right-source);
+    one multichannel file → N mono channels, or 2×N channels using the layout above.
+    Each output = L ∗ h<sub>L</sub> + R ∗ h<sub>R</sub>.
+  </div>
+  <table>
+    <thead><tr><th>Ch</th><th>Impulse response</th><th>Length</th><th></th><th>Out</th><th>Az °</th><th>El °</th><th>High-pass Hz</th><th>Delay ms</th><th>Gain (dbl-click = 0)</th><th></th><th>Level</th></tr></thead>
+    <tbody id="rirBody"></tbody>
+  </table>
+  <input id="oneFile" type="file" accept="audio/*,.wav,.flac,.aif,.aiff" hidden>
+</section>
+
+<section>
+  <h2>4 · Mix</h2>
+  <div class="row">
+    <label><input id="frontOn" type="checkbox" checked> Front stereo on outputs 1 (L) &amp; 2 (R): the source signal with no processing</label>
+    <label>Front level <input id="frontDb" type="number" value="0" max="12" step="0.5"> dB</label>
+    <label>Master <input id="master" type="number" value="-6" step="1"> dB</label>
+  </div>
+  <div class="note">Outputs follow the pair rule: odd numbers (1, 3, 5 …) are left speakers, even numbers (2, 4, 6 …) are right. Convolved channels start at output 3 by default. The front pair gets no convolution, high-pass or delay — only its level and the master volume.</div>
+</section>
+
+<section>
+  <h2>5 · Offline render (no real-time limits)</h2>
+  <div class="row">
+    <button id="render" class="primary">Render music file → multichannel WAV</button>
+    <label><input id="normOut" type="checkbox" checked> Normalize output peak to −1 dBFS</label>
+  </div>
+  <div class="note">Uses the selected track from the section 2 list and the current RIRs, gains, mutes and routing. Renders faster than real time, then downloads a 24-bit WAV with one channel per output, ready to play through the MOTU from any multichannel player. Rough size: 16 ch × 5 min ≈ 640 MB.</div>
+</section>
+
+<section>
+  <h2>6 · Hall model → ray-traced directional RIRs</h2>
+  <div class="row">
+    <label>Preset <select id="hPreset"><option value="concertgebouw">Concertgebouw Amsterdam · Grote Zaal (occupied)</option><option value="custom">Custom</option></select></label>
+    <label>Length <input id="hL" type="number" step="0.5"> m</label>
+    <label>Width <input id="hW" type="number" step="0.5"> m</label>
+    <label>Height <input id="hH" type="number" step="0.5"> m</label>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <label>Target RT60 (s)</label>
+    <label>125 <input id="rt0" type="number" step="0.05"></label>
+    <label>250 <input id="rt1" type="number" step="0.05"></label>
+    <label>500 <input id="rt2" type="number" step="0.05"></label>
+    <label>1k <input id="rt3" type="number" step="0.05"></label>
+    <label>2k <input id="rt4" type="number" step="0.05"></label>
+    <label>4k <input id="rt5" type="number" step="0.05"></label>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <label>Audience floor absorbs × <input id="hFloor" type="number" step="0.1"></label>
+    <label>Scattering (0–1) <input id="hScat" type="number" step="0.05" min="0" max="1"></label>
+    <label><input id="hCal" type="checkbox" checked> Calibrate absorption to hit target RT</label>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <label>Sources: from stage wall <input id="sX" type="number" step="0.5"> m</label>
+    <label>height <input id="sZ" type="number" step="0.1"> m</label>
+    <label>spacing <input id="sSp" type="number" step="0.5"> m</label>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <label>Listener: from stage wall <input id="rX" type="number" step="0.5"> m</label>
+    <label>right of centre <input id="rY" type="number" step="0.5"> m</label>
+    <label>ear height <input id="rZ" type="number" step="0.1"> m</label>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <label>Rays per source <input id="hRays" type="number" step="10000" value="200000" style="width:90px"></label>
+    <label>IR length <input id="hLen" type="number" step="0.1" value="3"> s</label>
+    <label>Image-source part <input id="hMix" type="number" step="10" value="150"> ms</label>
+    <label>Panning sharpness <input id="hPan" type="number" step="1" value="6"></label>
+  </div>
+  <div class="row" style="margin-top:10px;align-items:flex-start;gap:18px">
+    <div><div class="note" style="margin:0 0 4px">Plan view (stage on the left)</div><svg id="hPlan" width="380" height="250"></svg></div>
+    <div id="hRes" class="mono"></div>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <button id="hGo" class="primary">Ray-trace &amp; load into channels</button>
+    <button id="hExport">Export RIRs as 32-ch WAV</button>
+    <span id="hStatus" class="note" style="margin:0"></span>
+  </div>
+  <div class="note">
+    Method: the exact image-source method for the early specular reflections (with full direction of arrival), plus stochastic ray tracing with surface scattering, frequency-dependent absorption and air absorption for everything else. The late part is synthesized as noise shaped per octave band and per direction by the ray-traced energy. Each arrival is panned to the nearest speaker directions, using the Az/El of each channel in section 3, so the output matches your speaker layout (re-run after changing them).
+    It treats the hall as a rectangular box: balconies, the deep raised stage, organ and ceiling coffers are only represented through the scattering coefficient. Expect a plausible "Concertgebouw-like" room, not a measurement of it.
+  </div>
+</section>
+
+</main>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const MAXOUT = 24;
+const dbToLin = db => db <= -60 ? 0 : Math.pow(10, db / 20);
+const fmtDb = db => (db > 0 ? '+' : '') + (+db).toFixed(1) + ' dB';
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const byName = (a, b) => a.name.localeCompare(b.name, undefined, {numeric: true});
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+const S = {
+  ctx: null, nch: 16, outN: 2, rows: [], chans: [], meterEls: [],
+  inBus: null, merger: null, master: null, dryL: null, dryR: null,
+  elSrc: null, liveSrc: null, stream: null, mode: 'file', applyTok: 0, loadTarget: -1
+};
+
+function status(msg, cls = '') { const e = $('#status'); e.textContent = msg; e.className = cls; }
+
+/* ---------- devices ---------- */
+async function listDevices(askPerm) {
+  if (!navigator.mediaDevices) { status('Device selection unavailable here — use System default output (set the MOTU as default in macOS).', 'warn'); return; }
+  if (askPerm) {
+    try { const s = await navigator.mediaDevices.getUserMedia({audio: true}); s.getTracks().forEach(t => t.stop()); }
+    catch (e) { status('Microphone permission denied: device names stay hidden, but the defaults still work.', 'warn'); }
+  }
+  const devs = await navigator.mediaDevices.enumerateDevices();
+  const fill = (sel, kind, defLabel) => {
+    const prev = sel.value;
+    const list = devs.filter(d => d.kind === kind && d.deviceId !== 'default' && d.deviceId !== 'communications');
+    sel.innerHTML = `<option value="">${defLabel}</option>` +
+      list.map((d, i) => `<option value="${esc(d.deviceId)}">${esc(d.label || (kind + ' ' + (i + 1)))}</option>`).join('');
+    if (prev && list.some(d => d.deviceId === prev)) sel.value = prev;
+    else if (kind === 'audiooutput') { const m = list.find(d => /motu/i.test(d.label)); if (m) sel.value = m.deviceId; }
+  };
+  fill($('#outDev'), 'audiooutput', 'System default');
+  fill($('#motuDev'), 'audioinput', 'Default input');
+  fill($('#loopDev'), 'audioinput', 'Default input');
+  const pick = (sel, re) => { if (sel.value) return; const o = [...sel.options].find(o => re.test(o.textContent)); if (o) sel.value = o.value; };
+  pick($('#motuDev'), /motu/i);
+  pick($('#loopDev'), /blackhole|loopback|soundflower/i);
+  if (askPerm) status('Devices listed.', 'ok');
+}
+
+/* ---------- engine ---------- */
+async function startEngine() {
+  try {
+    if (S.ctx) { const old = S.ctx; S.ctx = null; await old.close().catch(() => {}); }
+    const sr = +$('#sr').value, sink = $('#outDev').value;
+    const opts = {sampleRate: sr, latencyHint: $('#lat').value};
+    let ctx;
+    try { ctx = new AudioContext(sink ? {...opts, sinkId: sink} : opts); }
+    catch (e) { ctx = new AudioContext(opts); }
+    if (sink && ctx.setSinkId && ctx.sinkId !== sink) await ctx.setSinkId(sink);
+    await ctx.resume();
+    S.ctx = ctx;
+    S.outN = Math.min(MAXOUT, ctx.destination.maxChannelCount);
+    S.nch = clamp(Math.round(+$('#nch').value) || 16, 1, 22);
+    makeRows(S.nch);
+    buildGraph();
+    fillDrySelects();
+    updateInfo();
+    status(`Engine running · ${S.outN} output channels available`, S.outN > 2 ? 'ok' : 'warn');
+    await applyAll();
+  } catch (e) { console.error(e); status('Engine failed: ' + e.message, 'bad'); }
+}
+
+function buildGraph() {
+  const ctx = S.ctx, outN = S.outN;
+  const d = ctx.destination;
+  d.channelCount = outN; d.channelCountMode = 'explicit'; d.channelInterpretation = 'discrete';
+
+  S.master = new GainNode(ctx, {gain: dbToLin(+$('#master').value), channelCount: outN, channelCountMode: 'explicit', channelInterpretation: 'discrete'});
+  S.merger = new ChannelMergerNode(ctx, {numberOfInputs: outN});
+  S.merger.connect(S.master).connect(d);
+
+  S.inBus = new GainNode(ctx, {gain: dbToLin(+$('#inGain').value), channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers'});
+
+  // front stereo (pure) path
+  const split = new ChannelSplitterNode(ctx, {numberOfOutputs: 2});
+  S.inBus.connect(split);
+  S.dryL = new GainNode(ctx, {gain: 0}); S.dryR = new GainNode(ctx, {gain: 0});
+  split.connect(S.dryL, 0); split.connect(S.dryR, 1);
+
+  // per convolved channel: convolver(stereo IR) -> splitter -> mono sum (L*hL + R*hR) -> merger[out]
+  S.chans = S.rows.map(() => {
+    const sp = new ChannelSplitterNode(ctx, {numberOfOutputs: 2});
+    const sum = new GainNode(ctx, {gain: 0, channelCount: 1, channelCountMode: 'explicit', channelInterpretation: 'discrete'});
+    sp.connect(sum, 0, 0); sp.connect(sum, 1, 0);
+    const an = new AnalyserNode(ctx, {fftSize: 1024});
+    const delay = new DelayNode(ctx, {maxDelayTime: 0.05, delayTime: 0, channelCount: 1, channelCountMode: 'explicit'});
+    sum.connect(an); sum.connect(delay);
+    return {conv: null, split: sp, sum, an, delay};
+  });
+
+  // sources
+  freshPlayer();
+  S.elSrc = new MediaElementAudioSourceNode(ctx, {mediaElement: $('#player')});
+  S.liveSrc = S.stream ? buildLiveChain() : null;
+  connectSource();
+  S.rows.forEach((_, i) => routeOne(i));
+  routeDry();
+  setGains();
+  setDelays();
+}
+
+function setConv(i, buf) {
+  const c = S.chans[i]; if (!c) return;
+  if (c.conv) { try { S.inBus.disconnect(c.conv); } catch {} c.conv.disconnect(); c.conv = null; }
+  if (!buf) return;
+  const conv = new ConvolverNode(S.ctx, {disableNormalization: true, buffer: buf,
+    channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers'});
+  S.inBus.connect(conv); conv.connect(c.split);
+  c.conv = conv;
+}
+
+function routeOne(i) {
+  const c = S.chans[i], r = S.rows[i]; if (!c) return;
+  try { c.delay.disconnect(); } catch {}
+  if (r.out >= 0 && r.out < S.outN) c.delay.connect(S.merger, 0, r.out);
+}
+
+function setDelays() {
+  if (!S.ctx) return;
+  S.rows.forEach((r, i) => { const c = S.chans[i]; if (c) c.delay.delayTime.setValueAtTime(clamp(r.delay, 0, 20) / 1000, S.ctx.currentTime); });
+}
+
+function routeDry() {
+  if (!S.ctx) return;
+  const g = $('#frontOn').checked ? dbToLin(+$('#frontDb').value) : 0;
+  [[S.dryL, 0], [S.dryR, 1]].forEach(([n, o]) => {
+    n.disconnect();
+    n.gain.setTargetAtTime(g, S.ctx.currentTime, 0.02);
+    if (o >= 0 && o < S.outN) n.connect(S.merger, 0, o);
+  });
+}
+
+function setGains() {
+  if (!S.ctx) return;
+  const anySolo = S.rows.some(r => r.solo);
+  S.rows.forEach((r, i) => {
+    const c = S.chans[i]; if (!c) return;
+    const g = (r.mute || (anySolo && !r.solo)) ? 0 : dbToLin(r.db);
+    c.sum.gain.setTargetAtTime(g, S.ctx.currentTime, 0.02);
+  });
+}
+
+function freshPlayer() {
+  // A media element can feed only one MediaElementAudioSourceNode ever, so swap in a new one.
+  const old = $('#player');
+  const p = document.createElement('audio');
+  p.id = 'player'; p.controls = true; wirePlayer(p);
+  if (old.src) {
+    const t = old.currentTime, wasPlaying = !old.paused;
+    p.src = old.src;
+    p.addEventListener('loadedmetadata', () => { p.currentTime = t; if (wasPlaying) p.play(); }, {once: true});
+  }
+  old.pause();
+  old.replaceWith(p);
+}
+
+function connectSource() {
+  if (!S.ctx) return;
+  for (const n of [S.elSrc, S.liveSrc]) if (n) try { n.disconnect(); } catch {}
+  const n = S.mode === 'file' ? S.elSrc : (S.liveMode === S.mode ? S.liveSrc : null);
+  if (n) n.connect(S.inBus);
+  if (S.mode !== 'file') $('#player').pause();
+}
+
+function showMode(m) {
+  S.mode = m;
+  document.querySelector(`input[name=mode][value=${m}]`).checked = true;
+  document.querySelectorAll('.src').forEach(d => d.hidden = d.dataset.mode !== m);
+  connectSource();
+}
+
+// MediaStream -> (optional channel pick) -> stereo node
+function buildLiveChain() {
+  const ctx = S.ctx, src = new MediaStreamAudioSourceNode(ctx, {mediaStream: S.stream});
+  const first = S.livePair || 0;
+  if (first === 0) return src;
+  const got = S.stream.getAudioTracks()[0].getSettings().channelCount || 2;
+  const sp = new ChannelSplitterNode(ctx, {numberOfOutputs: Math.max(2, got)});
+  const mg = new ChannelMergerNode(ctx, {numberOfInputs: 2});
+  src.connect(sp);
+  sp.connect(mg, Math.min(first, got - 2), 0);
+  sp.connect(mg, Math.min(first + 1, got - 1), 1);
+  return mg;
+}
+
+async function startLive(mode) {
+  try {
+    if (!S.ctx) await startEngine();
+    if (S.stream) S.stream.getTracks().forEach(t => t.stop());
+    const id = mode === 'motu' ? $('#motuDev').value : $('#loopDev').value;
+    S.livePair = mode === 'motu' ? +$('#motuPair').value : 0;
+    const want = S.livePair + 2;
+    S.stream = await navigator.mediaDevices.getUserMedia({audio: {
+      deviceId: id ? {exact: id} : undefined, channelCount: {ideal: want},
+      echoCancellation: false, noiseSuppression: false, autoGainControl: false}});
+    const st = S.stream.getAudioTracks()[0].getSettings();
+    const got = st.channelCount || 2;
+    S.liveSrc = buildLiveChain();
+    S.liveMode = mode;
+    showMode(mode);
+    const label = S.stream.getAudioTracks()[0].label;
+    let msg = `${mode === 'motu' ? 'MOTU' : 'Apple Music'} input live: ${label} · ${got} ch @ ${st.sampleRate || '?'} Hz`;
+    if (got < want) { msg += ` — Chrome only exposes ${got} channels, so inputs ${got - 1}–${got} are used instead.`; status(msg, 'warn'); }
+    else status(msg, 'ok');
+    if (st.sampleRate && st.sampleRate !== S.ctx.sampleRate) status(msg + ` (input runs at ${st.sampleRate} Hz; Chrome resamples it)`, 'warn');
+  } catch (e) { console.error(e); status('Input failed: ' + e.message, 'bad'); }
+}
+
+/* ---------- playlist ---------- */
+const AUDIO_RE = /\.(flac|wav|aiff?|m4a|mp3|aac|ogg|opus|caf)$/i;
+function setPlaylist(files) {
+  S.playlist = [...files].filter(f => AUDIO_RE.test(f.name) && !f.name.startsWith('._'))
+    .sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name, undefined, {numeric: true}));
+  $('#playlist').innerHTML = S.playlist.map((f, i) =>
+    `<option value="${i}">${esc(f.webkitRelativePath || f.name)}</option>`).join('');
+  status(`${S.playlist.length} audio file(s) in list`, S.playlist.length ? 'ok' : 'warn');
+  if (S.playlist.length) playIndex(0, false);
+}
+
+async function playIndex(i, autoplay = true) {
+  if (!S.playlist || !S.playlist.length) return;
+  i = (i + S.playlist.length) % S.playlist.length;
+  S.plIndex = i;
+  const f = S.playlist[i];
+  S.musicFile = f;
+  $('#playlist').value = String(i);
+  if (!S.ctx) await startEngine();
+  showMode('file');
+  const p = $('#player');
+  if (S.objURL) URL.revokeObjectURL(S.objURL);
+  S.objURL = URL.createObjectURL(f);
+  p.src = S.objURL;
+  if (autoplay) p.play().catch(() => {});
+}
+
+function wirePlayer(p) {
+  p.addEventListener('ended', () => {
+    const last = S.plIndex >= (S.playlist || []).length - 1;
+    if (!last || $('#loopList').checked) playIndex(S.plIndex + 1);
+  });
+}
+
+function updateInfo() {
+  const ctx = S.ctx, el = $('#engineInfo');
+  if (!ctx) { el.textContent = 'Engine stopped.'; return; }
+  const max = ctx.destination.maxChannelCount;
+  const lat = ((ctx.baseLatency || 0) + (ctx.outputLatency || 0)) * 1000;
+  const active = S.chans.filter(c => c.conv).length;
+  let html = `${ctx.state} · ${ctx.sampleRate} Hz · device reports ${max} output channels (using ${S.outN}) · ` +
+    `${active} convolvers / ${active * 2} convolutions · output latency ≈ ${lat.toFixed(1)} ms`;
+  if (max <= 2) html += ` <span class="warn">— only 2 channels visible. Select the MOTU as output (or make it the macOS default), match its sample rate in Audio MIDI Setup, then restart the engine.</span>`;
+  el.innerHTML = html;
+}
+setInterval(updateInfo, 1000);
+
+/* ---------- impulse responses ---------- */
+function makeRows(n) {
+  const old = S.rows;
+  S.rows = Array.from({length: n}, (_, i) => old[i] || defaultRow(i));
+  renderTable();
+}
+
+// Default layout: outputs 3/4, 5/6 … are L/R pairs at mirrored azimuths (odd = left, even = right).
+const PAIR_DIRS = [[30, 0], [60, 0], [90, 0], [120, 0], [150, 0], [30, 40], [90, 40], [150, 40], [60, 40], [120, 40], [0, 90]];
+function defaultRow(i) {
+  const out = i + 2 < MAXOUT ? i + 2 : -1, [a, el] = PAIR_DIRS[Math.floor(i / 2) % PAIR_DIRS.length];
+  const left = out < 0 ? i % 2 === 0 : out % 2 === 0; // index 0 = output 1 = left
+  return {ir: null, out, db: 0, mute: false, solo: false, used: 0, az: left ? a : (360 - a) % 360, el, hpf: 0, delay: 0};
+}
+
+const mkIR = (name, L, R, sr) => ({name, L, R: R || L, sr, tag: (R && R !== L) ? 'L/R' : 'mono', cache: {}});
+
+async function decodeFile(f) {
+  const sr = S.ctx ? S.ctx.sampleRate : +$('#sr').value;
+  const oc = new OfflineAudioContext(1, 1, sr);
+  const buf = await oc.decodeAudioData(await f.arrayBuffer());
+  return {name: f.name, sr, chans: Array.from({length: buf.numberOfChannels}, (_, c) => buf.getChannelData(c))};
+}
+
+async function resample(x, from, to) {
+  if (from === to) return x;
+  const oc = new OfflineAudioContext(1, Math.ceil(x.length * to / from), to);
+  const b = new AudioBuffer({length: x.length, numberOfChannels: 1, sampleRate: from});
+  b.copyToChannel(x, 0);
+  const s = new AudioBufferSourceNode(oc, {buffer: b});
+  s.connect(oc.destination); s.start();
+  return (await oc.startRendering()).getChannelData(0);
+}
+
+async function irAt(ir, sr) {
+  if (ir.sr === sr) return ir;
+  if (!ir.cache[sr]) {
+    const L = await resample(ir.L, ir.sr, sr);
+    const R = ir.R === ir.L ? L : await resample(ir.R, ir.sr, sr);
+    ir.cache[sr] = {L, R};
+  }
+  return ir.cache[sr];
+}
+
+function trimLen(L, R, len) {
+  let pk = 0;
+  for (let n = 0; n < len; n++) { const a = Math.abs(L[n]), b = Math.abs(R[n]); if (a > pk) pk = a; if (b > pk) pk = b; }
+  const th = pk * 1e-4; // -80 dB
+  let n = len - 1;
+  while (n > 0 && Math.abs(L[n]) < th && Math.abs(R[n]) < th) n--;
+  return Math.max(1, n + 1);
+}
+
+let applyTimer;
+function scheduleApply() { clearTimeout(applyTimer); applyTimer = setTimeout(applyAll, 150); }
+
+async function prepBuffers(sr, alive = () => true) {
+  const maxLen = Math.max(1, Math.round((+$('#irMax').value || 4) * sr));
+  const trim = $('#autoTrim').checked, norm = $('#normalize').checked;
+  const prep = [];
+  for (const r of S.rows) {
+    if (!r.ir) { prep.push(null); continue; }
+    const {L, R} = await irAt(r.ir, sr);
+    if (!alive()) return null;
+    let len = Math.min(L.length, R.length, maxLen);
+    if (trim) len = trimLen(L, R, len);
+    let e = 0; for (let n = 0; n < len; n++) e += L[n] * L[n] + R[n] * R[n];
+    prep.push({L, R, len, e});
+  }
+  const used = prep.filter(Boolean);
+  const maxE = Math.max(1e-12, ...used.map(p => p.e));
+  const scale = norm ? 1 / Math.sqrt(maxE) : 1;
+  const fade = Math.round(0.02 * sr);
+  const bufs = prep.map((p, i) => {
+    if (!p) { S.rows[i].used = 0; return null; }
+    const b = new AudioBuffer({numberOfChannels: 2, length: p.len, sampleRate: sr});
+    const l = b.getChannelData(0), r = b.getChannelData(1);
+    for (let n = 0; n < p.len; n++) { l[n] = p.L[n] * scale; r[n] = p.R[n] * scale; }
+    const f = Math.min(fade, p.len);
+    for (let k = 0; k < f; k++) { const idx = p.len - f + k, w = 0.5 * (1 + Math.cos(Math.PI * k / f)); l[idx] *= w; r[idx] *= w; }
+    S.rows[i].used = p.len / sr;
+    const fc = S.rows[i].hpf;
+    if (fc > 0) {
+      const hl = linPhaseHP(l, fc, sr), hr = linPhaseHP(r, fc, sr);
+      const hb = new AudioBuffer({numberOfChannels: 2, length: hl.length, sampleRate: sr});
+      hb.copyToChannel(hl, 0); hb.copyToChannel(hr, 1);
+      return hb;
+    }
+    return b;
+  });
+  return {bufs, count: used.length, taps: used.reduce((a, p) => a + 2 * p.len, 0)};
+}
+
+// Linear-phase high-pass: a 4th-order Butterworth run forwards and backwards = zero phase,
+// 48 dB/oct (8th-order Linkwitz–Riley magnitude, −6 dB at fc). Baked into the impulse response,
+// so it costs nothing at run time. Ringing that would fall before t = 0 is dropped (it lands in the
+// silent gap before the direct sound in practically every RIR).
+function hpCoefs(fc, sr, Q) {
+  const w = 2 * Math.PI * fc / sr, cs = Math.cos(w), al = Math.sin(w) / (2 * Q), a0 = 1 + al;
+  return [(1 + cs) / 2 / a0, -(1 + cs) / a0, (1 + cs) / 2 / a0, -2 * cs / a0, (1 - al) / a0];
+}
+function linPhaseHP(x, fc, sr) {
+  fc = clamp(fc, 20, 400);
+  const pad = Math.round(4 * sr / fc), buf = new Float64Array(pad + x.length + pad);
+  buf.set(x, pad);
+  let y = filtfilt(buf, hpCoefs(fc, sr, 0.5411961));
+  y = filtfilt(y, hpCoefs(fc, sr, 1.3065630));
+  return Float32Array.from(y.subarray(pad));
+}
+
+async function applyAll() {
+  if (!S.ctx) return;
+  const tok = ++S.applyTok, ctx = S.ctx;
+  const res = await prepBuffers(ctx.sampleRate, () => tok === S.applyTok && ctx === S.ctx);
+  if (!res) return;
+  res.bufs.forEach((b, i) => setConv(i, b));
+  renderTable();
+  if (res.count) status(`${res.count} RIRs active · ${2 * res.count} convolutions · ${(res.taps / 1e6).toFixed(2)} M taps total`, 'ok');
+}
+
+/* ---------- offline render ---------- */
+function effGain(i) {
+  const anySolo = S.rows.some(r => r.solo), r = S.rows[i];
+  return (r.mute || (anySolo && !r.solo)) ? 0 : dbToLin(r.db);
+}
+
+async function renderOffline() {
+  const btn = $('#render');
+  if (!S.musicFile) return status('Pick a track from the music list in section 2 first (offline render works on files only).', 'warn');
+  if (!S.rows.some(r => r.ir)) return status('Load or generate RIRs first.', 'warn');
+  btn.disabled = true;
+  try {
+    const sr = S.ctx ? S.ctx.sampleRate : +$('#sr').value;
+    status('Decoding music…');
+    const music = await new OfflineAudioContext(2, 1, sr).decodeAudioData(await S.musicFile.arrayBuffer());
+    status('Preparing RIRs…');
+    const {bufs} = await prepBuffers(sr);
+    const dryG = $('#frontOn').checked ? dbToLin(+$('#frontDb').value) : 0, dlo = 0, dro = 1;
+    const outs = S.ctx ? S.outN : Math.max(2, ...S.rows.map(r => r.out + 1));
+    const tail = Math.max(0, ...bufs.filter(Boolean).map(b => b.length));
+    const len = music.length + tail;
+    const oc = new OfflineAudioContext({numberOfChannels: outs, length: len, sampleRate: sr});
+    oc.destination.channelInterpretation = 'discrete';
+
+    const master = new GainNode(oc, {gain: dbToLin(+$('#master').value), channelCount: outs, channelCountMode: 'explicit', channelInterpretation: 'discrete'});
+    const merger = new ChannelMergerNode(oc, {numberOfInputs: outs});
+    merger.connect(master).connect(oc.destination);
+    const inBus = new GainNode(oc, {gain: dbToLin(+$('#inGain').value), channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers'});
+    const src = new AudioBufferSourceNode(oc, {buffer: music});
+    src.connect(inBus);
+
+    if (dryG) {
+      const sp = new ChannelSplitterNode(oc, {numberOfOutputs: 2}); inBus.connect(sp);
+      [[0, dlo], [1, dro]].forEach(([ch, o]) => {
+        if (o < 0 || o >= outs) return;
+        const g = new GainNode(oc, {gain: dryG}); sp.connect(g, ch); g.connect(merger, 0, o);
+      });
+    }
+    bufs.forEach((b, i) => {
+      const r = S.rows[i], g = effGain(i);
+      if (!b || !g || r.out < 0 || r.out >= outs) return;
+      const conv = new ConvolverNode(oc, {disableNormalization: true, buffer: b, channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers'});
+      const sp = new ChannelSplitterNode(oc, {numberOfOutputs: 2});
+      const sum = new GainNode(oc, {gain: g, channelCount: 1, channelCountMode: 'explicit', channelInterpretation: 'discrete'});
+      const dl = new DelayNode(oc, {maxDelayTime: 0.05, delayTime: clamp(r.delay, 0, 20) / 1000, channelCount: 1, channelCountMode: 'explicit'});
+      inBus.connect(conv); conv.connect(sp); sp.connect(sum, 0, 0); sp.connect(sum, 1, 0);
+      sum.connect(dl).connect(merger, 0, r.out);
+    });
+
+    for (let t = 5; t * sr < len - 256; t += 5) {
+      oc.suspend(t).then(() => { status(`Rendering… ${Math.round(100 * t * sr / len)}%`); oc.resume(); });
+    }
+    src.start();
+    const t0 = performance.now();
+    status('Rendering…');
+    const out = await oc.startRendering();
+    const secs = (performance.now() - t0) / 1000;
+
+    let peak = 0;
+    for (let c = 0; c < out.numberOfChannels; c++) { const d = out.getChannelData(c); for (let n = 0; n < d.length; n++) { const a = Math.abs(d[n]); if (a > peak) peak = a; } }
+    const g = $('#normOut').checked && peak > 0 ? Math.pow(10, -1 / 20) / peak : 1;
+    status('Writing WAV…');
+    const blob = wav24(out, g);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = S.musicFile.name.replace(/\.[^.]+$/, '') + `_hall_${outs}ch.wav`;
+    document.body.appendChild(a); a.click(); a.remove();
+    const peakDb = 20 * Math.log10(peak * g + 1e-12);
+    status(`Rendered ${(len / sr).toFixed(1)} s in ${secs.toFixed(1)} s (${(len / sr / secs).toFixed(1)}× real time) · ${outs} ch · peak ${peakDb.toFixed(1)} dBFS` +
+      (peak * g > 1 ? ' — clipped! lower Master or enable output normalization' : ''), peak * g > 1 ? 'warn' : 'ok');
+  } catch (e) { console.error(e); status('Render failed: ' + e.message, 'bad'); }
+  btn.disabled = false;
+}
+
+function wav24(buf, gain) {
+  const nc = buf.numberOfChannels, n = buf.length, sr = buf.sampleRate, ba = nc * 3, dataLen = n * ba;
+  if (dataLen > 4294967295 - 68) throw new Error('Output exceeds the 4 GB WAV limit — use a shorter file or fewer channels.');
+  const h = new DataView(new ArrayBuffer(68));
+  const str = (o, t) => { for (let i = 0; i < t.length; i++) h.setUint8(o + i, t.charCodeAt(i)); };
+  str(0, 'RIFF'); h.setUint32(4, 60 + dataLen, true); str(8, 'WAVE');
+  str(12, 'fmt '); h.setUint32(16, 40, true);
+  h.setUint16(20, 0xFFFE, true); h.setUint16(22, nc, true); h.setUint32(24, sr, true);
+  h.setUint32(28, sr * ba, true); h.setUint16(32, ba, true); h.setUint16(34, 24, true);
+  h.setUint16(36, 22, true); h.setUint16(38, 24, true); h.setUint32(40, 0, true);
+  [1, 0, 0, 0, 0, 0, 0x10, 0, 0x80, 0, 0, 0xAA, 0, 0x38, 0x9B, 0x71].forEach((b, i) => h.setUint8(44 + i, b));
+  str(60, 'data'); h.setUint32(64, dataLen, true);
+  const chans = Array.from({length: nc}, (_, c) => buf.getChannelData(c));
+  const parts = [h.buffer], CH = 65536;
+  for (let s0 = 0; s0 < n; s0 += CH) {
+    const m = Math.min(CH, n - s0), u = new Uint8Array(m * ba);
+    let o = 0;
+    for (let k = 0; k < m; k++) for (let c = 0; c < nc; c++) {
+      let x = chans[c][s0 + k] * gain; x = x > 1 ? 1 : x < -1 ? -1 : x;
+      let v = Math.round(x * 8388607); if (v < 0) v += 16777216;
+      u[o++] = v & 255; u[o++] = (v >> 8) & 255; u[o++] = (v >> 16) & 255;
+    }
+    parts.push(u);
+  }
+  return new Blob(parts, {type: 'audio/wav'});
+}
+
+async function loadBulk(fileList) {
+  const files = [...fileList].sort(byName);
+  if (!files.length) return;
+  try {
+    status(`Decoding ${files.length} file(s)…`);
+    const dec = [];
+    for (const f of files) dec.push(await decodeFile(f));
+    const n = S.nch; let assigned = 0, note = '';
+    if (dec.length === 1 && dec[0].chans.length > 2) assigned = assignMulti(dec[0]);
+    else if (dec.length >= 2 * n && dec.every(d => d.chans.length === 1)) {
+      for (let i = 0; i < n; i++) { const a = dec[2 * i], b = dec[2 * i + 1]; S.rows[i].ir = mkIR(`${a.name} + ${b.name}`, a.chans[0], b.chans[0], a.sr); }
+      assigned = n;
+    } else {
+      dec.slice(0, n).forEach((d, i) => { S.rows[i].ir = mkIR(d.name, d.chans[0], d.chans[1], d.sr); });
+      assigned = Math.min(n, dec.length);
+      if (dec.some(d => d.chans.length > 2)) note = ' (files with >2 channels: first two used)';
+      if (dec.length > n) note += ` (${dec.length - n} extra file(s) ignored)`;
+    }
+    renderTable();
+    status(`Assigned ${assigned} channel(s)${note}` + (S.ctx ? '' : ' — start the engine to hear them'), 'ok');
+    applyAll();
+  } catch (e) { console.error(e); status('Could not decode: ' + e.message, 'bad'); }
+}
+
+function assignMulti(d) {
+  const c = d.chans, n = S.nch, k = c.length, blocks = $('#layout').value === 'blocks', half = Math.floor(k / 2);
+  if (k >= 2 * n) {
+    for (let i = 0; i < n; i++) {
+      const li = blocks ? i : 2 * i, ri = blocks ? half + i : 2 * i + 1;
+      S.rows[i].ir = mkIR(`${d.name} [${li + 1}+${ri + 1}]`, c[li], c[ri], d.sr);
+    }
+    return n;
+  }
+  const m = Math.min(n, k);
+  for (let i = 0; i < m; i++) S.rows[i].ir = mkIR(`${d.name} [${i + 1}]`, c[i], null, d.sr);
+  return m;
+}
+
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+function genDemo() {
+  // Synthetic stand-ins: speakers on a circle, sources at ±30°, RT60 ≈ 2.2 s, darker as it decays.
+  const sr = S.ctx ? S.ctx.sampleRate : +$('#sr').value, n = S.nch, N = Math.round(2.6 * sr);
+  const rng = mulberry32(12345), dec = Math.exp(-6.9078 / (2.2 * sr));
+  const srcAz = [-30, 30].map(d => d * Math.PI / 180);
+  for (let i = 0; i < n; i++) {
+    const az = (i / n) * 2 * Math.PI;
+    const pair = srcAz.map(sa => {
+      const h = new Float32Array(N);
+      const dir = Math.pow(0.5 + 0.5 * Math.cos(az - sa), 2);
+      const d0 = Math.round((0.012 + 0.008 * rng()) * sr);
+      h[d0] = 0.15 + 0.85 * dir;
+      for (let k = 0; k < 14; k++) {
+        const t = d0 + Math.round((0.004 + 0.07 * rng()) * sr);
+        h[t] += (rng() * 2 - 1) * 0.5 * Math.exp(-(t - d0) / (0.05 * sr));
+      }
+      const start = d0 + Math.round(0.015 * sr), ramp = 0.03 * sr;
+      let g = 0.12, y = 0;
+      for (let t = start; t < N; t++) {
+        const a = 0.85 - 0.65 * (t - start) / (N - start);
+        y += a * ((rng() * 2 - 1) - y);
+        h[t] += y * g * Math.min(1, (t - start) / ramp);
+        g *= dec;
+      }
+      return h;
+    });
+    S.rows[i].ir = mkIR(`demo ${i + 1} (az ${Math.round(az * 180 / Math.PI)}°)`, pair[0], pair[1], sr);
+  }
+  renderTable(); applyAll();
+  status('Generated demo RIRs' + (S.ctx ? '' : ' — start the engine to hear them'), 'ok');
+}
+
+/* ---------- hall model: image sources + ray tracing ---------- */
+const BANDS = [125, 250, 500, 1000, 2000, 4000];
+const XO = [177, 354, 707, 1414, 2828];
+const AIR_M = [0.44, 1.31, 2.73, 4.66, 9.86, 29.7].map(dbkm => dbkm / 1000 / 4.343); // energy, 1/m (20 °C, 50 % RH)
+const C_SOUND = 343;
+const PRESETS = {
+  // 44 × 28 × 17 m, flat floor, 1.5 m platform; RT ≈ 2.0–2.2 s occupied at mid frequencies.
+  // Band values around that are estimates — edit freely.
+  concertgebouw: {L: 44, W: 28, H: 17, rt: [2.4, 2.3, 2.15, 2.05, 1.85, 1.6], floor: 2.5, scat: 0.6,
+    sX: 7, sZ: 2.7, sSp: 6, rX: 24, rY: 0, rZ: 1.2}
+};
+const tick = () => new Promise(r => setTimeout(r, 0));
+const hStatus = (m, cls = '') => { const e = $('#hStatus'); e.textContent = m; e.className = 'note ' + cls; e.style.margin = 0; };
+
+function applyPreset(k) {
+  const p = PRESETS[k]; if (!p) return;
+  for (const id of ['L', 'W', 'H']) $('#h' + id).value = p[id];
+  p.rt.forEach((v, b) => $('#rt' + b).value = v);
+  $('#hFloor').value = p.floor; $('#hScat').value = p.scat;
+  for (const id of ['sX', 'sZ', 'sSp', 'rX', 'rY', 'rZ']) $('#' + id).value = p[id];
+  drawPlan();
+}
+
+function parseDirs() { return S.rows.map(r => ({az: +r.az || 0, el: +r.el || 0})); }
+
+function hallParams() {
+  const g = id => +$(id).value;
+  const P = {L: g('#hL'), W: g('#hW'), H: g('#hH'), rt: BANDS.map((_, b) => g('#rt' + b)),
+    floor: g('#hFloor'), scat: clamp(g('#hScat'), 0, 0.99), rays: Math.max(1000, Math.round(g('#hRays'))),
+    len: clamp(g('#hLen'), 0.3, 8), tmix: g('#hMix') / 1000, pan: Math.max(1, g('#hPan')), calib: $('#hCal').checked};
+  const m = 0.2, cx = (v, D) => clamp(v, m, D - m);
+  const sx = cx(g('#sX'), P.L), sz = cx(g('#sZ'), P.H), half = g('#sSp') / 2;
+  P.src = [[sx, cx(P.W / 2 - half, P.W), sz], [sx, cx(P.W / 2 + half, P.W), sz]]; // listener's left = -y
+  P.rcv = [cx(g('#rX'), P.L), cx(P.W / 2 + g('#rY'), P.W), cx(g('#rZ'), P.H)];
+  P.dirs = parseDirs();
+  P.V = P.dirs.map(({az, el}) => { const a = az * Math.PI / 180, e = el * Math.PI / 180; // listener faces -x (the stage)
+    return [-Math.cos(e) * Math.cos(a), -Math.cos(e) * Math.sin(a), Math.sin(e)]; });
+  return P;
+}
+
+function drawPlan() {
+  const svg = $('#hPlan'); let P; try { P = hallParams(); } catch { return; }
+  const Wd = 380, Ht = 250, pad = 14, s = Math.min((Wd - 2 * pad) / P.L, (Ht - 2 * pad) / P.W);
+  const X = x => pad + x * s, Y = y => pad + y * s;
+  const dot = (p, col, lab) => `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="4.5" fill="${col}"/><text x="${X(p[0]) + 7}" y="${Y(p[1]) + 4}" fill="${col}" font-size="11">${lab}</text>`;
+  const r = P.rcv;
+  svg.innerHTML = `<rect x="${X(0)}" y="${Y(0)}" width="${P.L * s}" height="${P.W * s}" fill="none" stroke="#4a515b"/>
+    <rect x="${X(0)}" y="${Y(0)}" width="${Math.min(P.L, 2 * P.src[0][0]) * s}" height="${P.W * s}" fill="#5fb3ff12"/>
+    <text x="${X(0) + 4}" y="${Y(P.W) - 5}" fill="#8b939e" font-size="10">stage</text>
+    <text x="${X(P.L) - 4}" y="${Y(P.W) - 5}" fill="#8b939e" font-size="10" text-anchor="end">${P.L} × ${P.W} × ${P.H} m</text>
+    ${dot(P.src[0], '#ff7b7b', 'L')}${dot(P.src[1], '#ff7b7b', 'R')}${dot(r, '#5fb3ff', 'you')}
+    <path d="M${X(r[0]) - 12} ${Y(r[1])} l7 -4 v8 z" fill="#5fb3ff"/>`;
+}
+
+function surfaceAlphas(P, x) { // x[b] = -ln(1 - mean alpha)
+  const A = [P.W * P.H, P.W * P.H, P.L * P.H, P.L * P.H, P.L * P.W, P.L * P.W];
+  const k = [1, 1, 1, 1, P.floor, 1];
+  const S = A.reduce((a, v) => a + v, 0), SK = A.reduce((a, v, i) => a + v * k[i], 0);
+  return k.map(ki => BANDS.map((_, b) => clamp(ki * (1 - Math.exp(-x[b])) * S / SK, 0.001, 0.98)));
+}
+
+// Trace one ray; cb is called for every straight segment before the wall it ends on.
+function traceRay(P, alpha, src, dMax, rng, e, cb) {
+  let px = src[0], py = src[1], pz = src[2];
+  const z = 2 * rng() - 1, ph = 2 * Math.PI * rng(), rr = Math.sqrt(1 - z * z);
+  let dx = rr * Math.cos(ph), dy = rr * Math.sin(ph), dz = z;
+  for (let b = 0; b < 6; b++) e[b] = 1;
+  let dist = 0, scattered = false;
+  const L = P.L, W = P.W, H = P.H, scat = P.scat;
+  while (dist < dMax) {
+    const tx = dx > 0 ? (L - px) / dx : dx < 0 ? -px / dx : Infinity;
+    const ty = dy > 0 ? (W - py) / dy : dy < 0 ? -py / dy : Infinity;
+    const tz = dz > 0 ? (H - pz) / dz : dz < 0 ? -pz / dz : Infinity;
+    let t = tx, ax = 0; if (ty < t) { t = ty; ax = 1; } if (tz < t) { t = tz; ax = 2; }
+    if (t > dMax - dist) t = dMax - dist;
+    cb(px, py, pz, dx, dy, dz, t, dist, e, scattered);
+    px += dx * t; py += dy * t; pz += dz * t; dist += t;
+    if (dist >= dMax) break;
+    const side = ax === 0 ? (dx > 0 ? 1 : 0) : ax === 1 ? (dy > 0 ? 1 : 0) : (dz > 0 ? 1 : 0);
+    const al = alpha[2 * ax + side]; let emax = 0;
+    for (let b = 0; b < 6; b++) { e[b] *= 1 - al[b]; if (e[b] > emax) emax = e[b]; }
+    if (emax < 1e-11) break;
+    if (ax === 0) px = side ? L : 0; else if (ax === 1) py = side ? W : 0; else pz = side ? H : 0;
+    if (rng() < scat) { // Lambert (diffuse) reflection
+      scattered = true;
+      const u1 = rng(), u2 = rng(), r = Math.sqrt(u1), phi = 2 * Math.PI * u2, n = Math.sqrt(1 - u1) * (side ? -1 : 1);
+      const a = r * Math.cos(phi), c = r * Math.sin(phi);
+      if (ax === 0) { dx = n; dy = a; dz = c; } else if (ax === 1) { dy = n; dx = a; dz = c; } else { dz = n; dx = a; dy = c; }
+    } else { if (ax === 0) dx = -dx; else if (ax === 1) dy = -dy; else dz = -dz; }
+  }
+}
+
+// Room-average energy decay (no receiver) → T per band. Used to calibrate absorption.
+function decayT(P, alpha, nRays, tMax, rng) {
+  const dt = 0.01, nb = Math.ceil(tMax / dt), E = new Float64Array(nb * 6), e = new Float64Array(6);
+  const cb = (px, py, pz, dx, dy, dz, t, dist, ee) => {
+    const t0 = dist / C_SOUND, t1 = (dist + t) / C_SOUND;
+    for (let k = Math.ceil(t0 / dt); k * dt < t1 && k < nb; k++)
+      for (let b = 0; b < 6; b++) E[b * nb + k] += ee[b] * Math.exp(-AIR_M[b] * k * dt * C_SOUND);
+  };
+  for (let i = 0; i < nRays; i++) traceRay(P, alpha, P.src[0], tMax * C_SOUND, rng, e, cb);
+  return BANDS.map((_, b) => fitT(E.subarray(b * nb, (b + 1) * nb), dt, false));
+}
+
+// Fit T60 from an energy curve (schroeder=true: integrate backwards first). Uses -5…-35 dB (or -5…-25).
+function fitT(E, dt, schroeder) {
+  let curve = E;
+  if (schroeder) { curve = new Float64Array(E.length); let acc = 0; for (let i = E.length - 1; i >= 0; i--) { acc += E[i]; curve[i] = acc; } }
+  let ref = 0; for (const v of curve) if (v > ref) ref = v;
+  if (!ref) return NaN;
+  const dB = Array.from(curve, v => 10 * Math.log10(v / ref + 1e-30));
+  const end = dB.some(v => v <= -35) ? -35 : -25;
+  let n = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+  dB.forEach((y, i) => { if (y <= -5 && y >= end) { const x = i * dt; n++; sx += x; sy += y; sxx += x * x; sxy += x * y; } });
+  if (n < 3) return NaN;
+  const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+  return slope < 0 ? -60 / slope : NaN;
+}
+
+function panGains(ux, uy, uz, V, p, G) {
+  let sum = 0;
+  for (let d = 0; d < V.length; d++) {
+    const c = (1 + ux * V[d][0] + uy * V[d][1] + uz * V[d][2]) / 2;
+    const w = c > 0 ? Math.pow(c, p) : 0; G[d] = w; sum += w;
+  }
+  for (let d = 0; d < V.length; d++) G[d] /= sum || 1;
+}
+
+function imageSources(P, alpha, src, tEnd) {
+  const out = [], dims = [P.L, P.W, P.H], rcv = P.rcv, rMax = tEnd * C_SOUND;
+  const nMax = dims.map(D => Math.ceil(rMax / (2 * D)) + 1);
+  const ax = [[], [], []]; // per axis: candidate {pos, hits0, hits1}
+  for (let a = 0; a < 3; a++)
+    for (let n = -nMax[a]; n <= nMax[a]; n++) for (let q = 0; q <= 1; q++) {
+      const pos = (1 - 2 * q) * src[a] + 2 * n * dims[a];
+      if (Math.abs(pos - rcv[a]) <= rMax) ax[a].push({pos, h0: Math.abs(n - q), h1: Math.abs(n)});
+    }
+  const ref = alpha.map(al => al.map(a => Math.sqrt(1 - a)));
+  const spec = Math.sqrt(1 - P.scat);
+  for (const X of ax[0]) for (const Y of ax[1]) {
+    const dxy2 = (X.pos - rcv[0]) ** 2 + (Y.pos - rcv[1]) ** 2;
+    if (dxy2 > rMax * rMax) continue;
+    for (const Z of ax[2]) {
+      const r = Math.sqrt(dxy2 + (Z.pos - rcv[2]) ** 2);
+      if (r > rMax || r < 1e-3) continue;
+      const hits = [X.h0, X.h1, Y.h0, Y.h1, Z.h0, Z.h1], order = hits.reduce((s, v) => s + v, 0);
+      const a = new Float64Array(6);
+      for (let b = 0; b < 6; b++) {
+        let g = Math.pow(spec, order) * Math.exp(-AIR_M[b] * r / 2) / (4 * Math.PI * r);
+        for (let w = 0; w < 6; w++) if (hits[w]) g *= Math.pow(ref[w][b], hits[w]);
+        a[b] = g;
+      }
+      out.push({t: r / C_SOUND, u: [(X.pos - rcv[0]) / r, (Y.pos - rcv[1]) / r, (Z.pos - rcv[2]) / r], a, order});
+    }
+  }
+  return out;
+}
+
+function lpCoefs(fc, sr) {
+  const w = 2 * Math.PI * fc / sr, cs = Math.cos(w), al = Math.sin(w) / (2 * Math.SQRT1_2), a0 = 1 + al;
+  return [(1 - cs) / 2 / a0, (1 - cs) / a0, (1 - cs) / 2 / a0, -2 * cs / a0, (1 - al) / a0];
+}
+function filtfilt(x, c) { // zero-phase biquad
+  const [b0, b1, b2, a1, a2] = c, N = x.length, y = new Float64Array(N);
+  let z1 = 0, z2 = 0;
+  for (let n = 0; n < N; n++) { const v = x[n], o = b0 * v + z1; z1 = b1 * v - a1 * o + z2; z2 = b2 * v - a2 * o; y[n] = o; }
+  z1 = z2 = 0;
+  for (let n = N - 1; n >= 0; n--) { const v = y[n], o = b0 * v + z1; z1 = b1 * v - a1 * o + z2; z2 = b2 * v - a2 * o; y[n] = o; }
+  return y;
+}
+
+function smoothHist(h, nb) {
+  const S = new Float64Array(nb + 1); for (let k = 0; k < nb; k++) S[k + 1] = S[k] + h[k];
+  const o = new Float64Array(nb);
+  for (let k = 0; k < nb; k++) {
+    const hw = clamp(Math.round(0.1 * k), 2, 20), lo = Math.max(0, k - hw), hi = Math.min(nb - 1, k + hw);
+    o[k] = (S[hi + 1] - S[lo]) / (hi - lo + 1);
+  }
+  return o;
+}
+
+function gauss(rng) { let u = 0; while (u === 0) u = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rng()); }
+
+async function runHall() {
+  const btn = $('#hGo'); btn.disabled = true;
+  try {
+    const P = hallParams(), nD = P.dirs.length;
+    if (!nD) throw new Error('No speaker directions given.');
+    const sr = S.ctx ? S.ctx.sampleRate : +$('#sr').value;
+    const rng = mulberry32(20261121);
+    const V = P.volume = P.L * P.W * P.H, Sarea = 2 * (P.L * P.W + P.L * P.H + P.W * P.H);
+    const directT = Math.hypot(P.src[0][0] - P.rcv[0], P.src[0][1] - P.rcv[1], P.src[0][2] - P.rcv[2]) / C_SOUND;
+    const tmix = Math.max(P.tmix, directT + 0.03);
+
+    // 1) Eyring estimate, then calibrate with room-average ray decays
+    let x = BANDS.map((_, b) => Math.max(0.002, (0.161 * V / P.rt[b] - 4 * AIR_M[b] * V) / Sarea));
+    let alpha = surfaceAlphas(P, x), Tcal = null;
+    if (P.calib) {
+      for (let it = 0; it < 3; it++) {
+        hStatus(`Calibrating absorption (pass ${it + 1}/3)…`); await tick();
+        Tcal = decayT(P, alpha, 6000, Math.min(6, 0.8 * Math.max(...P.rt)), rng);
+        x = x.map((xb, b) => {
+          const dT = 13.8155 / P.rt[b], dM = 13.8155 / Tcal[b], air = C_SOUND * AIR_M[b];
+          return isFinite(dM) && dM - air > 1e-6 ? clamp(xb * Math.max(1e-3, dT - air) / (dM - air), 1e-3, 3) : xb;
+        });
+        alpha = surfaceAlphas(P, x);
+      }
+    }
+
+    // 2) Image sources (early specular part, exact directions)
+    const imgs = P.src.map(s => imageSources(P, alpha, s, tmix));
+
+    // 3) Ray tracing with a spherical receiver → energy histogram per direction / band / ms
+    const nb = Math.ceil(P.len * 1000) + 1, G = new Float64Array(nD), e = new Float64Array(6);
+    const R = Math.max(0.3, Math.min(1.5, ...P.rcv, P.L - P.rcv[0], P.W - P.rcv[1], P.H - P.rcv[2]) - 0.01);
+    const R2 = R * R, kDet = 1 / ((4 / 3) * Math.PI * R ** 3 * 4 * Math.PI * P.rays); // each ray carries 1/N of the source energy
+    const [rx, ry, rz] = P.rcv;
+    const hists = [];
+    for (let s = 0; s < 2; s++) {
+      const hist = new Float64Array(nD * 6 * nb);
+      const cb = (px, py, pz, dx, dy, dz, t, dist, ee, scattered) => {
+        const wx = rx - px, wy = ry - py, wz = rz - pz, tc = wx * dx + wy * dy + wz * dz;
+        const d2 = wx * wx + wy * wy + wz * wz - tc * tc; if (d2 >= R2) return;
+        const half = Math.sqrt(R2 - d2); let t1 = tc - half, t2 = tc + half;
+        if (t2 <= 0 || t1 >= t) return; if (t1 < 0) t1 = 0; if (t2 > t) t2 = t;
+        const dm = dist + (t1 + t2) / 2, ta = dm / C_SOUND;
+        if (!scattered && ta < tmix) return; // covered by image sources
+        const bin = Math.floor(ta * 1000); if (bin >= nb) return;
+        panGains(-dx, -dy, -dz, P.V, P.pan, G);
+        const k = (t2 - t1) * kDet;
+        for (let b = 0; b < 6; b++) {
+          const eb = ee[b] * Math.exp(-AIR_M[b] * dm) * k;
+          for (let d = 0; d < nD; d++) hist[(d * 6 + b) * nb + bin] += eb * G[d];
+        }
+      };
+      for (let i = 0; i < P.rays; i += 5000) {
+        const m = Math.min(5000, P.rays - i);
+        for (let j = 0; j < m; j++) traceRay(P, alpha, P.src[s], P.len * C_SOUND, rng, e, cb);
+        hStatus(`Ray tracing ${s ? 'right' : 'left'} source… ${Math.round(100 * (i + m) / P.rays)}%`); await tick();
+      }
+      hists.push(hist);
+    }
+
+    // 4) Synthesis: early deltas + band-shaped noise, split into octave bands with zero-phase crossovers
+    const N = Math.ceil(P.len * sr), spb = sr / 1000;
+    const lp = XO.map(f => lpCoefs(f, sr));
+    const bandE = BANDS.map(() => new Float64Array(N));
+    const out = [[], []];
+    for (let s = 0; s < 2; s++) {
+      const gImg = imgs[s].map(im => { const g = new Float64Array(nD); panGains(im.u[0], im.u[1], im.u[2], P.V, P.pan, g); return g.map(Math.sqrt); });
+      for (let d = 0; d < nD; d++) {
+        hStatus(`Synthesizing ${s ? 'R' : 'L'}-source channel ${d + 1}/${nD}…`); await tick();
+        const noise = new Float64Array(N); for (let n = 0; n < N; n++) noise[n] = gauss(rng);
+        const h = new Float64Array(N);
+        for (let b = 0; b < 6; b++) {
+          const xb = new Float64Array(N);
+          imgs[s].forEach((im, k) => {
+            const pos = im.t * sr, i0 = Math.floor(pos), f = pos - i0, g = im.a[b] * gImg[k][d];
+            if (i0 + 1 < N) { xb[i0] += g * (1 - f); xb[i0 + 1] += g * f; }
+          });
+          const Hs = smoothHist(hists[s].subarray((d * 6 + b) * nb, (d * 6 + b + 1) * nb), nb);
+          for (let n = 0; n < N; n++) {
+            const bf = n / spb - 0.5, k0 = Math.floor(bf), f = bf - k0;
+            const v = (k0 < 0 ? Hs[0] : Hs[Math.min(k0, nb - 1)]) * (1 - f) + Hs[Math.min(k0 + 1, nb - 1)] * f;
+            if (v > 0) xb[n] += noise[n] * Math.sqrt(v / spb);
+          }
+          const hi = b < 5 ? filtfilt(xb, lp[b]) : xb;
+          const lo = b > 0 ? filtfilt(xb, lp[b - 1]) : null;
+          const E = bandE[b];
+          for (let n = 0; n < N; n++) { const y = hi[n] - (lo ? lo[n] : 0); h[n] += y; E[n] += y * y; }
+        }
+        out[s].push(Float32Array.from(h));
+      }
+    }
+
+    // 5) Report and load
+    const T30 = bandE.map(E => fitT(E, 1 / sr, true));
+    const meanA = BANDS.map((_, b) => { const A = [P.W * P.H, P.W * P.H, P.L * P.H, P.L * P.H, P.L * P.W, P.L * P.W]; return alpha.reduce((a, al, i) => a + al[b] * A[i], 0) / Sarea; });
+    $('#hRes').innerHTML = `<table style="margin:0"><tr><th>Band</th><th>Target</th><th>Sim T30</th><th>ᾱ</th></tr>` +
+      BANDS.map((f, b) => `<tr><td>${f >= 1000 ? f / 1000 + 'k' : f}</td><td>${P.rt[b].toFixed(2)}</td><td>${isFinite(T30[b]) ? T30[b].toFixed(2) : '–'}</td><td>${meanA[b].toFixed(3)}</td></tr>`).join('') +
+      `</table><div class="note">${imgs[0].length} image sources/source · receiver Ø ${(2 * R).toFixed(1)} m · direct sound ${(directT * 1000).toFixed(0)} ms</div>`;
+
+    const name = $('#hPreset').value === 'custom' ? `${P.L}×${P.W}×${P.H}` : $('#hPreset').selectedOptions[0].textContent.split(' ·')[0];
+    S.hall = {L: out[0], R: out[1], sr, name, dirs: P.dirs};
+    const n = Math.min(nD, S.nch);
+    for (let i = 0; i < n; i++) S.rows[i].ir = mkIR(`${name} · ${P.dirs[i].az}°/${P.dirs[i].el}°`, out[0][i], out[1][i], sr);
+    if (+$('#irMax').value < P.len) $('#irMax').value = P.len;
+    renderTable();
+    await applyAll();
+    hStatus(`Done: ${nD} directions × 2 sources loaded into channels 1–${n}` + (nD !== S.nch ? ` (app has ${S.nch} channels)` : '') + (S.ctx ? '' : ' — start the engine to listen'), 'ok');
+  } catch (err) { console.error(err); hStatus('Hall model failed: ' + err.message, 'bad'); }
+  btn.disabled = false;
+}
+
+function exportHall() {
+  const H = S.hall; if (!H) return hStatus('Run the hall model first.', 'warn');
+  const n = H.L.length, chans = [];
+  for (let i = 0; i < n; i++) chans.push(H.L[i], H.R[i]);
+  let peak = 0; for (const c of chans) for (const v of c) { const a = Math.abs(v); if (a > peak) peak = a; }
+  const buf = {numberOfChannels: chans.length, length: chans[0].length, sampleRate: H.sr, getChannelData: c => chans[c]};
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(wav24(buf, peak ? Math.pow(10, -1 / 20) / peak : 1));
+  a.download = `RIR_${H.name.replace(/\W+/g, '_')}_${n}dir_LRpairs_${chans.length}ch.wav`;
+  document.body.appendChild(a); a.click(); a.remove();
+  hStatus(`Exported ${chans.length}-channel WAV (pairs: L-source, R-source per direction). It loads back via "Load set" with layout "L,R pairs".`, 'ok');
+}
+
+/* ---------- table / UI ---------- */
+function outOptions(sel) {
+  let s = `<option value="-1"${sel < 0 ? ' selected' : ''}>—</option>`;
+  for (let k = 0; k < MAXOUT; k++) {
+    const dis = S.ctx && k >= S.outN;
+    s += `<option value="${k}"${k === sel ? ' selected' : ''}${dis ? ' disabled' : ''}>${k + 1} ${k % 2 ? 'R' : 'L'}${k < 2 ? ' (front)' : ''}</option>`;
+  }
+  return s;
+}
+
+function renderTable() {
+  const tb = $('#rirBody');
+  tb.innerHTML = S.rows.map((r, i) => {
+    const len = r.ir ? `${(r.used || r.ir.L.length / r.ir.sr).toFixed(2)} s · ${r.ir.tag}` : '';
+    return `<tr data-i="${i}">
+      <td class="mono">${i + 1}</td>
+      <td class="name" title="${esc(r.ir ? r.ir.name : '')}">${r.ir ? esc(r.ir.name) : '<span class="note">— none —</span>'}</td>
+      <td class="mono">${len}</td>
+      <td><button class="tog load">Load…</button></td>
+      <td><select class="out">${outOptions(r.out)}</select></td>
+      <td><input type="number" class="az" min="-180" max="360" step="5" value="${r.az}" style="width:58px"></td>
+      <td><input type="number" class="el" min="-90" max="90" step="5" value="${r.el}" style="width:52px"></td>
+      <td><input type="number" class="hpf" min="0" max="400" step="5" value="${r.hpf}" placeholder="off" style="width:62px"></td>
+      <td><input type="number" class="dly" min="0" max="20" step="0.5" value="${r.delay}" style="width:58px"></td>
+      <td><input type="range" class="gain" min="-24" max="12" step="0.5" value="${r.db}"> <span class="mono gv">${fmtDb(r.db)}</span></td>
+      <td><button class="tog m${r.mute ? ' on' : ''}">M</button> <button class="tog s${r.solo ? ' on' : ''}">S</button></td>
+      <td><div class="meter"><i></i></div></td></tr>`;
+  }).join('');
+  S.meterEls = [...tb.querySelectorAll('.meter')];
+}
+
+function fillDrySelects() { routeDry(); }
+
+const rowOf = e => { const tr = e.target.closest('tr'); return tr ? +tr.dataset.i : -1; };
+$('#rirBody').addEventListener('input', e => {
+  const i = rowOf(e); if (i < 0 || !e.target.classList.contains('gain')) return;
+  S.rows[i].db = +e.target.value;
+  e.target.parentNode.querySelector('.gv').textContent = fmtDb(S.rows[i].db);
+  setGains();
+});
+$('#rirBody').addEventListener('dblclick', e => {
+  if (!e.target.classList.contains('gain')) return;
+  e.target.value = 0; e.target.dispatchEvent(new Event('input', {bubbles: true}));
+});
+$('#rirBody').addEventListener('change', e => {
+  const i = rowOf(e); if (i < 0) return;
+  const r = S.rows[i], t = e.target, cl = t.classList;
+  if (cl.contains('out')) {
+    r.out = +t.value; routeOne(i);
+    if (r.out >= 0 && r.out < 2) status(`Channel ${i + 1} now shares output ${r.out + 1} with the unprocessed front stereo.`, 'warn');
+  }
+  if (cl.contains('az')) { r.az = ((+t.value % 360) + 360) % 360; t.value = r.az; }
+  if (cl.contains('el')) { r.el = clamp(+t.value || 0, -90, 90); t.value = r.el; }
+  if (cl.contains('dly')) { r.delay = clamp(+t.value || 0, 0, 20); t.value = r.delay; setDelays(); }
+  if (cl.contains('hpf')) {
+    const v = +t.value || 0; r.hpf = v <= 0 ? 0 : clamp(v, 20, 400); t.value = r.hpf;
+    scheduleApply();
+  }
+});
+$('#rirBody').addEventListener('click', e => {
+  const b = e.target.closest('button'), i = rowOf(e); if (!b || i < 0) return;
+  const r = S.rows[i];
+  if (b.classList.contains('load')) { S.loadTarget = i; $('#oneFile').click(); return; }
+  if (b.classList.contains('m')) { r.mute = !r.mute; b.classList.toggle('on', r.mute); }
+  if (b.classList.contains('s')) { r.solo = !r.solo; b.classList.toggle('on', r.solo); }
+  setGains();
+});
+$('#oneFile').addEventListener('change', async e => {
+  const f = e.target.files[0], i = S.loadTarget; e.target.value = '';
+  if (!f || i < 0) return;
+  try {
+    const d = await decodeFile(f);
+    S.rows[i].ir = mkIR(d.name, d.chans[0], d.chans[1], d.sr);
+    renderTable(); applyAll();
+  } catch (err) { status('Could not decode: ' + err.message, 'bad'); }
+});
+
+$('#perm').onclick = () => listDevices(true);
+$('#start').onclick = startEngine;
+$('#nch').onchange = () => { S.nch = clamp(Math.round(+$('#nch').value) || 16, 1, 22); if (S.ctx) startEngine(); else makeRows(S.nch); };
+$('#lat').onchange = () => { if (S.ctx) startEngine(); };
+$('#sr').onchange = () => { if (S.ctx) startEngine(); };
+$('#outDev').onchange = () => { if (S.ctx) startEngine(); };
+$('#music').onchange = e => { setPlaylist(e.target.files); e.target.value = ''; };
+$('#folder').onchange = e => { setPlaylist(e.target.files); e.target.value = ''; };
+$('#playlist').onchange = () => playIndex(+$('#playlist').value);
+$('#prev').onclick = () => playIndex((S.plIndex || 0) - 1);
+$('#next').onclick = () => playIndex((S.plIndex || 0) + 1);
+$('#motuGo').onclick = () => startLive('motu');
+$('#appleGo').onclick = () => startLive('apple');
+document.querySelectorAll('input[name=mode]').forEach(r => r.onchange = () => showMode(r.value));
+$('#inGain').onchange = () => S.inBus && S.inBus.gain.setTargetAtTime(dbToLin(+$('#inGain').value), S.ctx.currentTime, 0.02);
+$('#master').onchange = () => S.master && S.master.gain.setTargetAtTime(dbToLin(+$('#master').value), S.ctx.currentTime, 0.02);
+$('#frontOn').onchange = routeDry;
+$('#frontDb').onchange = routeDry;
+$('#allHpfGo').onclick = () => {
+  const v = +$('#allHpf').value || 0, f = v <= 0 ? 0 : clamp(v, 20, 400);
+  S.rows.forEach(r => r.hpf = f); renderTable(); scheduleApply();
+};
+$('#allDelGo').onclick = () => {
+  const d = clamp(+$('#allDel').value || 0, 0, 20);
+  S.rows.forEach(r => r.delay = d); renderTable(); setDelays();
+};
+$('#bulk').onchange = e => { loadBulk(e.target.files); e.target.value = ''; };
+$('#demo').onclick = genDemo;
+$('#render').onclick = renderOffline;
+$('#clear').onclick = () => { S.rows.forEach(r => { r.ir = null; r.used = 0; }); renderTable(); applyAll(); status('Cleared.'); };
+['#irMax', '#autoTrim', '#normalize'].forEach(id => $(id).addEventListener('change', scheduleApply));
+
+/* ---------- meters ---------- */
+const tmp = new Float32Array(1024), peaks = new Float32Array(32), clipT = new Float64Array(32).fill(-1e9);
+function meterLoop(t) {
+  requestAnimationFrame(meterLoop);
+  if (!S.ctx) return;
+  S.chans.forEach((c, i) => {
+    c.an.getFloatTimeDomainData(tmp);
+    let p = 0; for (let k = 0; k < tmp.length; k++) { const a = Math.abs(tmp[k]); if (a > p) p = a; }
+    peaks[i] = Math.max(p, peaks[i] * 0.92);
+    if (p >= 0.999) clipT[i] = t;
+    const el = S.meterEls[i]; if (!el) return;
+    const db = 20 * Math.log10(peaks[i] + 1e-9);
+    el.firstChild.style.width = clamp((db + 60) / 60 * 100, 0, 100) + '%';
+    el.classList.toggle('clip', t - clipT[i] < 1500);
+  });
+}
+requestAnimationFrame(meterLoop);
+
+/* ---------- init ---------- */
+makeRows(S.nch);
+fillDrySelects();
+applyPreset('concertgebouw');
+$('#hPreset').onchange = () => applyPreset($('#hPreset').value);
+document.querySelectorAll('#hL,#hW,#hH,#sX,#sZ,#sSp,#rX,#rY,#rZ').forEach(el => el.addEventListener('input', () => { if (PRESETS[$('#hPreset').value]) $('#hPreset').value = 'custom'; drawPlan(); }));
+$('#hGo').onclick = runHall;
+$('#hExport').onclick = exportHall;
+wirePlayer($('#player'));
+$('#motuPair').innerHTML = Array.from({length: 12}, (_, k) => `<option value="${2 * k}">${2 * k + 1}–${2 * k + 2}</option>`).join('');
+listDevices(false).catch(() => {});
+</script>
 </body>
 </html>
