@@ -1,1 +1,1012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MembraneModer by Justus Verhagen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0c1016;--panel:#131a22;--panel2:#18212b;--line:#243040;--text:#dde5ee;--muted:#8794a6;
+  --acc:#ff9d42;--acc2:#4cc9e8;--good:#7bd88f;--warn:#f2c14e;--patch:#a6e3a1;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;--sans:'IBM Plex Sans',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.45}
+.wrap{max-width:1200px;margin:0 auto;padding:16px 14px 40px}
+header h1{font-size:20px;font-weight:600;margin:0 0 2px;letter-spacing:.2px}
+header p{margin:0;color:var(--muted);font-size:13px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:12px}
+.panel h2{font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin:0 0 10px;font-weight:500}
+.panel h3{font-size:12px;color:var(--muted);margin:12px 0 8px;font-weight:500}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+label.f.hide{display:none}
+input[type=number],select{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:7px 8px;font-family:var(--mono);font-size:13px;width:100%}
+input[type=number]:focus,select:focus{outline:none;border-color:var(--acc2)}
+.chk{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);padding-top:18px}
+.chk input{width:18px;height:18px;accent-color:var(--acc2)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.stat{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.stat .k{font-size:11px;color:var(--muted)}
+.stat .v{font-family:var(--mono);font-size:15px;margin-top:2px}
+.stat .s{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{background:var(--panel2);color:var(--muted);border:0;padding:7px 11px;font-family:var(--sans);font-size:13px;cursor:pointer}
+.seg button.on{background:#223246;color:var(--text)}
+button.b{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:7px;padding:7px 11px;font-size:13px;cursor:pointer;font-family:var(--sans)}
+button.b:hover{border-color:var(--acc2)}
+button.x{background:none;border:1px solid var(--line);color:var(--muted);border-radius:6px;width:32px;height:32px;cursor:pointer;font-size:15px;align-self:end}
+button.x:hover{color:#ff7b72;border-color:#ff7b72}
+.freqrow{display:flex;gap:10px;align-items:center;margin:12px 0 8px;flex-wrap:wrap}
+.freqrow input[type=range]{flex:1;min-width:180px;accent-color:var(--acc)}
+.freqrow input[type=number]{width:110px}
+.title{font-family:var(--mono);font-size:13px;color:var(--text);margin:4px 0 8px;min-height:20px}
+.title b{color:var(--acc);font-weight:500}
+.canvwrap{display:flex;justify-content:center;background:#080b0f;border-radius:8px;padding:10px;position:relative}
+#mem{display:block;border-radius:2px;touch-action:none}
+.axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:6px;gap:8px}
+.legend{display:flex;align-items:center;gap:8px;margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--muted);flex-wrap:wrap}
+#cbar{height:10px;width:180px;border-radius:3px}
+#xsec{width:100%;height:110px;display:block;margin-top:10px;background:#080b0f;border-radius:8px}
+#fr{width:100%;height:300px;display:block;background:#080b0f;border-radius:8px;touch-action:none;cursor:crosshair}
+.keyrow{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
+.sw{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12.5px}
+th{text-align:left;color:var(--muted);font-weight:400;font-size:11px;padding:6px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel)}
+td{padding:5px 6px;border-bottom:1px solid #1b2430;white-space:nowrap}
+tr.r{cursor:pointer}
+tr.r:hover td{background:#1a2532}
+tr.cur td{background:#1f2c3b}
+tr.sel td{background:#2a2418}
+.tablewrap{max-height:360px;overflow:auto}
+.cbarw{display:inline-block;height:6px;background:var(--acc2);border-radius:3px;vertical-align:middle}
+.ebar{display:inline-block;height:6px;background:var(--acc);border-radius:3px;vertical-align:middle}
+.dim{color:#5a6676}
+.warn{color:var(--warn);font-size:12px;margin-top:6px;min-height:0}
+.status{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:auto}
+.notes{color:#b8c3d0;font-size:13px}
+.notes p{margin:6px 0}
+.notes code{font-family:var(--mono);font-size:12px;background:var(--panel2);padding:1px 5px;border-radius:4px;color:var(--text)}
+.prow{display:grid;grid-template-columns:28px 104px repeat(4,minmax(70px,1fr)) 32px;gap:8px;align-items:end;padding:8px 0;border-top:1px solid #1b2430}
+.prow .num{font-family:var(--mono);color:var(--patch);font-size:13px;align-self:center;padding-top:16px}
+@media (max-width:560px){.prow{grid-template-columns:24px 1fr 1fr 32px}.prow .num{padding-top:0}}
+.coverage{display:flex;align-items:center;gap:10px;margin-top:10px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.covbar{flex:1;max-width:320px;height:8px;background:var(--panel2);border-radius:4px;position:relative;overflow:hidden;border:1px solid var(--line)}
+.covbar i{position:absolute;left:0;top:0;bottom:0;background:var(--patch)}
+.covbar s{position:absolute;left:40%;top:-2px;bottom:-2px;width:2px;background:var(--warn)}
+.hint{font-size:12px;color:var(--muted);margin-top:6px}
+.polgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:10px}
+.polar{width:100%;aspect-ratio:1/1;display:block;background:#080b0f;border-radius:8px}
+.ptitle{font-size:12px;color:var(--muted);margin-bottom:6px;font-family:var(--mono)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--panel2);color:var(--muted);border-radius:14px;padding:4px 10px;font-family:var(--mono);font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.chip i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.chip.off{opacity:.35}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>MembraneModer by Justus Verhagen</h1>
+  <p>Tensioned Mylar film with fixed edges, a finite-area drive and optional damping patches. Modal solution with air loading.</p>
+</header>
+
+<section class="panel">
+  <h2>Membrane</h2>
+  <div class="grid">
+    <label class="f">Length Lx (m)<input type="number" id="Lx" value="2" step="0.05" min="0.05" max="5"></label>
+    <label class="f">Width Ly (m)<input type="number" id="Ly" value="0.4" step="0.05" min="0.05" max="5"></label>
+    <label class="f">Thickness (µm)<input type="number" id="h" value="5" step="0.5" min="0.5" max="200"></label>
+    <label class="f">Density (kg/m³)<input type="number" id="rho" value="1390" step="10" min="100" max="20000"></label>
+    <label class="f">Tension (N/m)<input type="number" id="T" value="100" step="10" min="1" max="10000"></label>
+    <label class="f">Film loss factor η<input type="number" id="eta" value="0.02" step="0.005" min="0.0001" max="1"></label>
+    <label class="f">Image resolution
+      <select id="res"><option value="600">600 px</option><option value="1000" selected>1000 px</option><option value="1600">1600 px</option><option value="2400">2400 px</option></select></label>
+    <label class="chk"><input type="checkbox" id="air" checked>Air loading (both sides)</label>
+  </div>
+  <h3>Drive (1 N total force, spread evenly over the drive area)</h3>
+  <div class="grid">
+    <label class="f">Drive shape
+      <select id="dshape"><option value="point">Point</option><option value="round" selected>Round</option><option value="rect">Rectangular</option></select></label>
+    <label class="f">Centre x (% of Lx)<input type="number" id="dx" value="50" step="1" min="1" max="99"></label>
+    <label class="f">Centre y (% of Ly)<input type="number" id="dy" value="50" step="1" min="1" max="99"></label>
+    <label class="f" id="lab_dd">Diameter (cm)<input type="number" id="dd" value="5" step="0.5" min="0.1" max="500"></label>
+    <label class="f hide" id="lab_dw">Width along x (cm)<input type="number" id="dw" value="8" step="0.5" min="0.1" max="500"></label>
+    <label class="f hide" id="lab_dh">Height along y (cm)<input type="number" id="dh" value="4" step="0.5" min="0.1" max="500"></label>
+  </div>
+  <div class="hint">You can also drag the drive (white dashed outline) on the membrane view.</div>
+</section>
+
+<section class="panel">
+  <h2>Damping patches</h2>
+  <div class="grid">
+    <label class="f">Material preset
+      <select id="preset">
+        <option value="tape" selected>Viscoelastic tape</option>
+        <option value="dots">Light silicone dots</option>
+        <option value="felt">Felt / foam strip</option>
+        <option value="mylar100">100 µm Mylar, bonded with 25 µm PSA</option>
+        <option value="custom">Custom</option>
+      </select></label>
+    <label class="f">Added mass (g/m²)<input type="number" id="pm" value="25" step="1" min="0" max="2000"></label>
+    <label class="f">Patch loss factor η<sub>p</sub><input type="number" id="peta" value="0.8" step="0.05" min="0" max="5"></label>
+    <label class="f">Viscous resistance R (Pa·s/m)<input type="number" id="pR" value="0" step="10" min="0" max="5000"></label>
+    <label class="f">Bending stiffness D (µN·m)<input type="number" id="pD" value="0" step="10" min="0" max="1000000"></label>
+    <label class="f">Bending loss factor η<sub>D</sub><input type="number" id="pDeta" value="0" step="0.01" min="0" max="2"></label>
+  </div>
+  <h3>Edge damping (perimeter band)</h3>
+  <div class="grid">
+    <label class="chk" style="padding-top:18px"><input type="checkbox" id="edgeOn">Damp the perimeter</label>
+    <label class="f">Band width (cm)<input type="number" id="ew" value="3" step="0.5" min="0.2" max="100"></label>
+    <label class="f">Profile
+      <select id="eprof"><option value="graded" selected>Tapered (rises toward edge)</option><option value="uniform">Uniform</option></select></label>
+    <label class="f">Edge material
+      <select id="epreset"><option value="foam" selected>Foam / felt pressed on film</option><option value="visco">Viscoelastic adhesive frame</option><option value="mylar">100 µm Mylar frame</option><option value="custom">Custom</option></select></label>
+    <label class="f">Added mass (g/m²)<input type="number" id="em" value="30" step="1" min="0" max="2000"></label>
+    <label class="f">Loss on tension η<input type="number" id="eeta" value="0.1" step="0.05" min="0" max="5"></label>
+    <label class="f">Viscous R (Pa·s/m)<input type="number" id="eR" value="400" step="20" min="0" max="10000"></label>
+    <label class="f">Bending D (µN·m)<input type="number" id="eD" value="0" step="10" min="0" max="1000000"></label>
+  </div>
+  <h3>Patches</h3>
+  <div class="bar" style="margin-top:10px">
+    <button class="b" id="addRect">+ Rectangle</button>
+    <button class="b" id="addCirc">+ Circle</button>
+    <button class="b" id="addEdges">Edge strips example</button>
+    <button class="b" id="clearP">Clear all</button>
+  </div>
+  <div id="plist"></div>
+  <div class="coverage"><span id="covTxt">Coverage 0%</span><div class="covbar"><i id="covFill" style="width:0"></i><s></s></div><span>max 40%</span></div>
+  <div class="warn" id="warnP"></div>
+  <div class="hint">Sizes and positions are in cm, measured from the corner at x = 0, y = 0. Drag a patch on the membrane view to move it.</div>
+</section>
+
+<section class="panel">
+  <h2>Key numbers</h2>
+  <div class="stats" id="stats"></div>
+  <div class="warn" id="warnModes"></div>
+</section>
+
+<section class="panel">
+  <div class="bar">
+    <div class="seg" id="viewSeg">
+      <button data-v="forced" class="on">Forced response</button>
+      <button data-v="mode">Single mode</button>
+    </div>
+    <div class="seg" id="dispSeg">
+      <button data-d="snap" class="on">Motion</button>
+      <button data-d="amp">Amplitude</button>
+    </div>
+    <button class="b" id="play">❚❚ Pause</button>
+    <span class="status" id="status"></span>
+  </div>
+  <div class="freqrow">
+    <button class="b" id="prevMode" title="Previous driven resonance">◀ mode</button>
+    <input type="range" id="fslider" min="0" max="1000" value="500">
+    <button class="b" id="nextMode" title="Next driven resonance">mode ▶</button>
+    <input type="number" id="fbox" value="632" step="1" min="20" max="20000">
+    <span class="dim" style="font-family:var(--mono);font-size:12px">Hz</span>
+  </div>
+  <div class="title" id="viewTitle"></div>
+  <div class="canvwrap" id="canvwrap"><canvas id="mem"></canvas></div>
+  <div class="axis"><span>x = 0</span><span id="axisInfo"></span><span id="axisX">x = 2 m</span></div>
+  <div class="legend"><span id="cbMin"></span><canvas id="cbar" width="180" height="10"></canvas><span id="cbMax"></span><span id="cbNote"></span></div>
+  <div class="warn" id="warnRes"></div>
+  <canvas id="xsec"></canvas>
+  <div class="keyrow"><span><span class="sw" style="background:var(--acc)"></span>Displacement along the line through the drive centre</span><span><span class="sw" style="background:#3a4a5e"></span>Envelope |w|</span><span><span class="sw" style="background:var(--patch)"></span>Patch</span><span><span class="sw" style="background:#cba6f7"></span>Edge band</span></div>
+</section>
+
+<section class="panel">
+  <h2>Dominant modes at the selected frequency</h2>
+  <div class="hint" id="domHint" style="margin:-4px 0 8px"></div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>(m, n)</th><th>Bare-film f (Hz)</th><th>Share of motion</th><th>Share of SPL</th><th>Phase</th></tr></thead>
+    <tbody id="domBody"></tbody>
+  </table></div>
+</section>
+
+<section class="panel">
+  <h2>Frequency response · 1 N peak drive force · tap or drag to pick a frequency</h2>
+  <canvas id="fr"></canvas>
+  <div class="keyrow">
+    <span><span class="sw" style="background:var(--acc)"></span>On-axis far-field SPL at 1 m, infinite baffle (left axis)</span>
+    <span><span class="sw" style="background:var(--acc2)"></span>Spatial RMS film velocity, dB re 1 m/s (right axis)</span>
+    <span id="keyBare" style="display:none"><span class="sw" style="background:#6b5a48"></span>SPL with no damping (bare film)</span>
+    <span><span class="sw" style="background:#55657a"></span>Ticks: driven resonances</span>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="bar" style="margin-bottom:8px">
+    <h2 style="margin:0">Radiation pattern · octave bands</h2>
+    <div class="seg" id="baffSeg" style="margin-left:auto">
+      <button data-b="dipole" class="on">Unbaffled dipole</button>
+      <button data-b="baffle">Infinite baffle</button>
+    </div>
+  </div>
+  <div class="hint" id="dirHint" style="margin:0 0 8px"></div>
+  <div class="chips" id="octChips"></div>
+  <div class="polgrid">
+    <div><div class="ptitle" id="ptX"></div><canvas class="polar" id="polX"></canvas></div>
+    <div><div class="ptitle" id="ptY"></div><canvas class="polar" id="polY"></canvas></div>
+    <div><div class="ptitle" id="ptO"></div><canvas class="polar" id="radar"></canvas>
+      <div class="keyrow" style="justify-content:center"><span><span class="sw" style="background:var(--acc)"></span><span id="rkX">Long axis</span></span><span><span class="sw" style="background:var(--acc2)"></span><span id="rkY">Short axis</span></span></div></div>
+  </div>
+  <div class="bar" style="margin-top:12px">
+    <label class="f" style="flex-direction:row;align-items:center;gap:8px">Octave in the third plot and the data table
+      <select id="octSel" style="width:auto"></select></label>
+    <label class="f" style="flex-direction:row;align-items:center;gap:8px">Polar range
+      <select id="dbRange" style="width:auto"><option value="20">20 dB</option><option value="30" selected>30 dB</option><option value="40">40 dB</option><option value="50">50 dB</option></select></label>
+    <button class="b" id="copyCsv">Copy all data as CSV</button><span class="dim" id="copyMsg" style="font-size:12px"></span>
+  </div>
+  <h3>Relative SPL (dB re on-axis) every 2°, full circle</h3>
+  <div class="tablewrap" style="max-height:420px"><table id="angTable"></table></div>
+  <h3>Octave summary</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Octave</th><th>Modes summed</th><th>Modal overlap</th><th>Modal note</th></tr></thead>
+    <tbody id="dirBody"></tbody>
+  </table></div>
+</section>
+
+<section class="panel">
+  <div class="bar" style="margin-bottom:8px">
+    <h2 style="margin:0">Bare-film resonances near the selected frequency</h2>
+    <label class="chk" style="padding:0;margin-left:auto;font-size:12px"><input type="checkbox" id="onlyDriven" checked>Driven modes only</label>
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>(m, n)</th><th>f with air (Hz)</th><th>f in vacuum (Hz)</th><th>λ (mm)</th><th>Coupling to drive</th><th>Net volume</th></tr></thead>
+    <tbody id="tbody"></tbody>
+  </table></div>
+</section>
+
+<section class="panel notes">
+  <h2>Model</h2>
+  <p>The film is treated as an ideal membrane: no bending stiffness, uniform isotropic tension <code>T</code>, surface mass <code>σ = ρh</code>, edges clamped. Its modes are <code>φ = sin(mπx/Lx)·sin(nπy/Ly)</code> with wavenumber <code>k = π√((m/Lx)² + (n/Ly)²)</code>. In vacuum <code>f = k·√(T/σ) / 2π</code>.</p>
+  <p><b>Drive area.</b> The 1 N force is spread evenly over the drive area, so each mode is excited by the average of its shape over that area. For a round drive of radius a, that average is <code>φ(x₀,y₀)·2J₁(ka)/(ka)</code>. For a rectangle of size w × h, it's <code>φ(x₀,y₀)·sinc(mπw/2Lx)·sinc(nπh/2Ly)</code>. Modes whose wavelength is shorter than the drive average out, so a larger drive acts as a spatial low-pass filter. A centred drive still only excites odd–odd modes.</p>
+  <p><b>Air loading.</b> Each mode gets the radiation impedance of a travelling wave with the same wavenumber on an infinite film, on both sides of the film. If the mode's wave is slower than sound (<code>k &gt; k₀</code>), the air acts as an added mass <code>2ρ₀/√(k² − k₀²)</code>. If it's faster (<code>k &lt; k₀</code>), the air acts as a radiation resistance <code>2ρ₀c₀/√(1 − k²/k₀²)</code>. This ignores coupling between modes through the air, stators, perforated plates and enclosures.</p>
+  <p><b>Damping patches.</b> Inside a patch, the model adds up to four things: surface mass <code>μ</code>, bending stiffness <code>D(1+iη<sub>D</sub>)</code> (using <code>∇²φ = −k²φ</code>, so the term is <code>D·kᵢ²kⱼ²∫φᵢφⱼ</code>), a loss factor <code>η<sub>p</sub></code> on the film's local tension energy (a viscoelastic layer that strains with the film), and an optional viscous resistance <code>R</code> (like felt touching a stator). Because these act only inside the patch, they couple modes together. The coupling integrals <code>∫φᵢφⱼ</code> and <code>∫∇φᵢ·∇φⱼ</code> are exact over each patch (closed form for rectangles, Bessel functions for circles). The membrane view solves the 400 bare-film modes nearest the selected frequency as one fully coupled system; the frequency response uses the nearest 60. All other modes keep only their own patch terms, without coupling to each other. Below a few hundred Hz this is essentially exact. At high frequency it underestimates how sharply the patches localise the motion. Patches are capped at 40% of the film area.</p>
+  <p><b>Radiation pattern.</b> In an infinite baffle the far-field pressure is <code>p(θ,ϕ) = ω²ρ₀·W̃(k sinθ cosϕ, k sinθ sinϕ)/(2πr)</code>, where <code>W̃</code> is the 2-D spatial Fourier transform of the film displacement. Each mode's transform has a closed form, so the pattern in each principal plane is exact for the solved modal amplitudes. For the unbaffled film (a dipole), the baffled pattern is multiplied by the obliquity factor <code>|cos θ|</code> (Kirchhoff thin-screen approximation), and the rear lobe mirrors the front with inverted polarity. This approximation gives the pattern, not the level: it ignores diffraction around the edges, the front–back cancellation that lowers bass output, and any stators. Each octave is the power average of 24 frequencies across the band (1/24-octave spacing). Levels are sampled every 2° around the full circle and given in dB relative to the on-axis (0°) level of the same octave. In the dipole case, ±90° is a null and the rear (90°–270°) mirrors the front. In the baffle case nothing radiates behind the baffle, so those angles are blank.</p>
+  <p><b>Seen as a distributed-mode loudspeaker.</b> The film works as a DML. Above the frequency where neighbouring driven modes overlap (modal overlap <code>n<sub>d</sub>(f)·η·f ≥ 1</code>, with <code>n<sub>d</sub></code> the density of driven modes), the response and the radiation come from many modes at once rather than one at a time. That is why the frequency response smooths out and the patterns stop changing shape from one frequency to the next. Unlike a bending-wave DML plate, a membrane has no dispersion: its waves travel at √(T/σ) at every frequency. For this film that's 120 m/s, below the speed of sound, so the film never reaches coincidence and every resonant mode on its own is a poor radiator. The sound that does get out comes from edge and corner regions, from the low-wavenumber part of the drive area, and from cancellation that is incomplete across the band. So at high frequencies the drive size and position set the beam as much as the film size does. Damping patches broaden each mode, which raises the modal overlap and evens out the patterns.</p>
+  <p><b>Edge damping.</b> The film is clamped, so its motion goes to zero at the frame: in a band of width b, a mode's motion only reaches about <code>sin(kb)</code> of its peak. A damping band is therefore almost invisible to long wavelengths (<code>kb ≪ 1</code>) and becomes effective once <code>b</code> is around a quarter wavelength or more. With a 3 cm band on this film that starts around 1–2 kHz. In that range the band absorbs waves that would otherwise reflect off the frame and build up resonances. The film then behaves more like a travelling-wave radiator: resonance peaks flatten and the response gets smoother. Below that, the edge band hardly changes the bass modes. The <i>Tapered</i> profile raises the damping in 5 steps toward the edge, which reflects less from the band's inner boundary than an abrupt uniform band. The band is modelled as frames (an outer rectangle minus an inner one) with the same exact integrals as the patches, and it counts toward the 40% coverage limit.</p>
+  <p><b>100 µm Mylar patch.</b> The preset assumes 100 µm PET (139 g/m²) bonded with about 25 µm of acrylic pressure-sensitive adhesive (PSA, about 25 g/m²), 164 g/m² in total. That is about 24 times the mass of the 5 µm film. Its bending stiffness is <code>D = Eh³/12(1−ν²) ≈ 440 µN·m</code> (E ≈ 4.5 GPa, ν ≈ 0.38). On the 100 N/m film, bending matches tension at <code>k = √(T/D) ≈ 480 rad/m</code> (13 mm wavelength, about 8–9 kHz). Above that the patch acts as a stiff, heavy plate and blocks the film's waves; below it, the patch acts mainly as added mass. The loss factors are modest estimates for a thin PSA bond. The bonded layer is assumed to carry no pre-tension, and the patch edges are not modelled as free plate edges.</p>
+  <p><b>Dominant modes.</b> "Share of motion" is each mode's <code>|qᵢ|²</code> as a fraction of the total (the spatial mean-square displacement). "Share of SPL" is <code>|qᵢIᵢ|/|ΣqI|</code>, where <code>Iᵢ</code> is the mode's net volume displacement. Shares above 100% mean that mode is being partly cancelled by others of opposite phase.</p>
+</section>
+</div>
+
+<script>
+'use strict';
+const RHO0=1.2, C0=343, TWO_PI=2*Math.PI, F_LO=20, F_HI=20000, NC_FIELD=400, NC_FR=60, MAX_COVER=0.40;
+const $=id=>document.getElementById(id);
+const S={};
+let M=null, G=null, FLD=null, FR=null, SOL=null;
+let PATCHES=[];
+let view='forced', disp='snap', selMode=-1, freq=632, playing=true, phase=0, lastT=0;
+let needField=true, needTable=true, needFRdraw=true, needDom=true;
+let DM=null,DR=null,DK=null,DD=null,DDI=null,ELEMS=[];
+
+/* ---------- maths helpers ---------- */
+function besselJ1(x){const ax=Math.abs(x);let ans;
+  if(ax<8){const y=x*x;
+    const a1=x*(72362614232.0+y*(-7895059235.0+y*(242396853.1+y*(-2972611.439+y*(15704.48260+y*(-30.16036606))))));
+    const a2=144725228442.0+y*(2300535178.0+y*(18583304.74+y*(99447.43394+y*(376.9991397+y))));
+    ans=a1/a2;}
+  else{const z=8/ax,y=z*z,xx=ax-2.356194491;
+    const a1=1.0+y*(0.183105e-2+y*(-0.3516396496e-4+y*(0.2457520174e-5+y*(-0.240337019e-6))));
+    const a2=0.04687499995+y*(-0.2002690873e-3+y*(0.8449199096e-5+y*(-0.88228987e-6+y*0.105787412e-6)));
+    ans=Math.sqrt(0.636619772/ax)*(Math.cos(xx)*a1-z*Math.sin(xx)*a2);if(x<0)ans=-ans;}
+  return ans;}
+function jinc(u){return Math.abs(u)<1e-4?1-u*u/8:2*besselJ1(u)/u;}
+function sinc(u){return Math.abs(u)<1e-8?1:Math.sin(u)/u;}
+function Ic(c,x1,x2){return Math.abs(c)<1e-12?(x2-x1):(Math.sin(c*x2)-Math.sin(c*x1))/c;}
+
+/* ---------- parameters ---------- */
+function num(id,def,lo,hi){let v=parseFloat($(id).value);if(!isFinite(v))v=def;v=Math.min(hi,Math.max(lo,v));$(id).value=+v.toPrecision(6);return v;}
+function readParams(){
+  S.Lx=num('Lx',2,0.05,5);S.Ly=num('Ly',0.4,0.05,5);
+  S.h=num('h',5,0.5,200)*1e-6;S.rho=num('rho',1390,100,20000);
+  S.T=num('T',100,1,10000);S.eta=num('eta',0.02,0.0001,1);
+  S.air=$('air').checked;S.res=+$('res').value;
+  S.sigma=S.rho*S.h;S.A=S.Lx*S.Ly;S.cm=Math.sqrt(S.T/S.sigma);
+  readDrive();readMaterial();readEdge();
+}
+function readDrive(){
+  const sh=$('dshape').value;
+  S.dx=num('dx',50,1,99)/100;S.dy=num('dy',50,1,99)/100;
+  const x0=S.dx*S.Lx,y0=S.dy*S.Ly,mx=2*Math.min(x0,S.Lx-x0),my=2*Math.min(y0,S.Ly-y0);
+  S.drive={shape:sh,d:num('dd',5,0.1,Math.min(mx,my)*100)/100,w:num('dw',8,0.1,mx*100)/100,h:num('dh',4,0.1,my*100)/100};
+  $('lab_dd').classList.toggle('hide',sh!=='round');$('lab_dw').classList.toggle('hide',sh!=='rect');$('lab_dh').classList.toggle('hide',sh!=='rect');
+}
+const EPRESETS={foam:[30,0.1,400,0],visco:[30,1.2,0,0],mylar:[164,0.05,0,440]};
+function readEdge(){S.edge={on:$('edgeOn').checked,w:num('ew',3,0.2,100)/100,graded:$('eprof').value==='graded',
+  mu:num('em',30,0,2000)/1000,eta:num('eeta',0.1,0,5),R:num('eR',400,0,10000),D:num('eD',0,0,1e6)*1e-6};
+  S.edge.w=Math.min(S.edge.w,0.45*Math.min(S.Lx,S.Ly));}
+function onEdgeChange(){
+  const prev=S.edge;readEdge();const cov=coverage(PATCHES,S.edge);
+  if(cov>MAX_COVER+1e-9){$('warnP').textContent=`That edge band would bring coverage to ${(cov*100).toFixed(1)}%. The limit is 40%, so it wasn't applied.`;
+    S.edge=prev;$('edgeOn').checked=prev.on;$('ew').value=+(prev.w*100).toFixed(2);return;}
+  $('warnP').textContent='';applyPatches();
+}
+$('epreset').addEventListener('change',e=>{const p=EPRESETS[e.target.value];if(p){$('em').value=p[0];$('eeta').value=p[1];$('eR').value=p[2];$('eD').value=p[3];}onEdgeChange();});
+['em','eeta','eR','eD'].forEach(id=>$(id).addEventListener('change',()=>{$('epreset').value='custom';onEdgeChange();}));
+['edgeOn','ew','eprof'].forEach(id=>$(id).addEventListener('change',onEdgeChange));
+function readMaterial(){S.pm=num('pm',25,0,2000)/1000;S.peta=num('peta',0.8,0,5);S.pR=num('pR',0,0,5000);S.pD=num('pD',0,0,1e6)*1e-6;S.pDeta=num('pDeta',0,0,2);}
+/* mass g/m², η_p, R, D µN·m, η_D. 100 µm PET: 1390·1e-4 = 139 g/m² + ~25 g/m² PSA; D = E h³/12(1−ν²) with E≈4.5 GPa, ν≈0.38 → ≈440 µN·m */
+const PRESETS={tape:[25,0.8,0,0,0],dots:[8,0.4,0,0,0],felt:[60,0.15,150,0,0],mylar100:[164,0.05,0,440,0.03]};
+
+/* ---------- physics ---------- */
+let _ma=0,_r=0;
+function airLoad(k,w){
+  _ma=0;_r=0;if(!S.air||w<=0)return;
+  const k0=w/C0,d=k*k-k0*k0,eps=(0.03*k0)*(0.03*k0)+1e-12;
+  if(d>0)_ma=2*RHO0/Math.sqrt(Math.max(d,eps));
+  else _r=2*RHO0*w/Math.sqrt(Math.max(-d,eps));
+}
+function fres(k){
+  let w=k*S.cm;if(!S.air)return w/TWO_PI;
+  for(let i=0;i<80;i++){airLoad(k,w);const wn=k*Math.sqrt(S.T/(S.sigma+_ma));
+    if(Math.abs(wn-w)<1e-10*w){w=wn;break;}w=0.5*(w+wn);}
+  return w/TWO_PI;
+}
+function kAt(f){
+  let lo=0,hi=TWO_PI*f/S.cm*1.01+1e-9;while(fres(hi)<f)hi*=2;
+  for(let i=0;i<60;i++){const mid=0.5*(lo+hi);if(fres(mid)<f)lo=mid;else hi=mid;}
+  return 0.5*(lo+hi);
+}
+function buildModes(){
+  let fCut=32000,kmax=kAt(fCut);
+  const CAP=350000;const est=kmax*kmax*S.A/(4*Math.PI);let capped=false;
+  if(est>CAP){kmax*=Math.sqrt(CAP/est);fCut=fres(kmax);capped=true;}
+  const mm=[],nn=[],kk=[];
+  for(let m=1;;m++){const kx=m*Math.PI/S.Lx;if(kx>kmax)break;
+    for(let n=1;;n++){const ky=n*Math.PI/S.Ly;const k=Math.hypot(kx,ky);if(k>kmax)break;mm.push(m);nn.push(n);kk.push(k);}}
+  const N=kk.length;
+  const idx=new Uint32Array(N);for(let i=0;i<N;i++)idx[i]=i;
+  idx.sort((a,b)=>kk[a]-kk[b]);
+  const o={N,fCut,capped,m:new Int32Array(N),n:new Int32Array(N),k:new Float64Array(N),f:new Float64Array(N),fv:new Float64Array(N),c:new Float64Array(N),I:new Float64Array(N)};
+  let Mmax=0,Nmax=0;
+  for(let t=0;t<N;t++){
+    const i=idx[t],m=mm[i],n=nn[i],k=kk[i];
+    o.m[t]=m;o.n[t]=n;o.k[t]=k;o.fv[t]=k*S.cm/TWO_PI;o.f[t]=fres(k);
+    o.I[t]=(m&1)&&(n&1)?4*S.A/(m*n*Math.PI*Math.PI):0;
+    if(m>Mmax)Mmax=m;if(n>Nmax)Nmax=n;
+  }
+  for(let t=1;t<N;t++)if(o.f[t]<o.f[t-1])o.f[t]=o.f[t-1];
+  o.Mmax=Mmax;o.Nmax=Nmax;M=o;
+}
+function computeCoupling(){
+  const d=S.drive,drv=[];
+  for(let t=0;t<M.N;t++){
+    const m=M.m[t],n=M.n[t],a=m*Math.PI/S.Lx,b=n*Math.PI/S.Ly;
+    let c=Math.sin(m*Math.PI*S.dx)*Math.sin(n*Math.PI*S.dy);
+    if(d.shape==='round')c*=jinc(M.k[t]*d.d/2);
+    else if(d.shape==='rect')c*=sinc(a*d.w/2)*sinc(b*d.h/2);
+    M.c[t]=c;if(Math.abs(c)>1e-9)drv.push(t);
+  }
+  M.drv=Int32Array.from(drv);
+}
+/* patch integrals for mode pair -> _M (∫φiφj), _K (∫∇φi·∇φj) */
+let _M=0,_K=0;
+function patchPair(p,m1,n1,m2,n2){
+  const a1=m1*Math.PI/S.Lx,a2=m2*Math.PI/S.Lx,b1=n1*Math.PI/S.Ly,b2=n2*Math.PI/S.Ly;
+  if(p.shape==='rect'){
+    const x1=p.cx-p.w/2,x2=p.cx+p.w/2,y1=p.cy-p.h/2,y2=p.cy+p.h/2;
+    const xm=Ic(a1-a2,x1,x2),xp=Ic(a1+a2,x1,x2),ym=Ic(b1-b2,y1,y2),yp=Ic(b1+b2,y1,y2);
+    const Xss=0.5*(xm-xp),Xcc=0.5*(xm+xp),Yss=0.5*(ym-yp),Ycc=0.5*(ym+yp);
+    _M=Xss*Yss;_K=a1*a2*Xcc*Yss+b1*b2*Xss*Ycc;
+  }else{
+    const R=p.d/2,Ar=Math.PI*R*R,fxm=a1-a2,fxp=a1+a2,fym=b1-b2,fyp=b1+b2;
+    const cxm=Math.cos(fxm*p.cx),cxp=Math.cos(fxp*p.cx),cym=Math.cos(fym*p.cy),cyp=Math.cos(fyp*p.cy);
+    const Dmm=Ar*jinc(R*Math.hypot(fxm,fym))*cxm*cym,Dmp=Ar*jinc(R*Math.hypot(fxm,fyp))*cxm*cyp,
+          Dpm=Ar*jinc(R*Math.hypot(fxp,fym))*cxp*cym,Dpp=Ar*jinc(R*Math.hypot(fxp,fyp))*cxp*cyp;
+    _M=0.25*(Dmm-Dmp-Dpm+Dpp);
+    _K=a1*a2*0.25*(Dmm-Dmp+Dpm-Dpp)+b1*b2*0.25*(Dmm+Dmp-Dpm-Dpp);
+  }
+}
+/* every damped region as an element with its own material; sign -1 subtracts (frames = outer − inner) */
+function edgeLayers(e){
+  if(!e||!e.on)return [];
+  const L=e.graded?5:1,out=[];
+  for(let l=0;l<L;l++){const f=e.graded?(L-l)/L:1,d0=e.w*l/L,d1=e.w*(l+1)/L;
+    const mat={mu:e.mu*f,R:e.R*f,eT:e.eta*f,D:e.D*f,eD:0.03};
+    out.push({shape:'rect',cx:S.Lx/2,cy:S.Ly/2,w:S.Lx-2*d0,h:S.Ly-2*d0,s:1,...mat});
+    out.push({shape:'rect',cx:S.Lx/2,cy:S.Ly/2,w:Math.max(0,S.Lx-2*d1),h:Math.max(0,S.Ly-2*d1),s:-1,...mat});}
+  return out;
+}
+function buildElems(){
+  ELEMS=PATCHES.map(p=>({...p,s:1,mu:S.pm,R:S.pR,eT:S.peta,D:S.pD,eD:S.pDeta})).concat(edgeLayers(S.edge));
+}
+function computePatchDiag(){
+  buildElems();
+  DM=new Float64Array(M.N);DR=new Float64Array(M.N);DK=new Float64Array(M.N);DD=new Float64Array(M.N);DDI=new Float64Array(M.N);
+  for(const p of ELEMS){if(p.w<=0||p.h<=0)continue;
+    for(let t=0;t<M.N;t++){patchPair(p,M.m[t],M.n[t],M.m[t],M.n[t]);const a=p.s*_M,b=p.s*_K;
+      DM[t]+=p.mu*a;DR[t]+=p.R*a;DK[t]+=p.eT*b;DD[t]+=p.D*a;DDI[t]+=p.D*p.eD*a;}}
+}
+function countBelow(arrF,list,f){
+  let lo=0,hi=list?list.length:arrF.length;
+  while(lo<hi){const mid=(lo+hi)>>1;const v=list?arrF[list[mid]]:arrF[mid];if(v<=f)lo=mid+1;else hi=mid;}
+  return lo;
+}
+function fLimit(f){return Math.min(M.fCut,Math.max(3*f,3000));}
+
+/* diagonal dynamic stiffness of mode j -> _dr,_di (includes own patch terms) */
+let _dr=0,_di=0;
+function diagD(j,w,usePatch){
+  const k=M.k[j];airLoad(k,w);const q=S.A/4;
+  _dr=q*(S.T*k*k-w*w*(S.sigma+_ma));_di=q*(S.T*S.eta*k*k+w*_r);
+  if(usePatch){const k4=k*k*k*k;_dr+=-w*w*DM[j]+k4*DD[j];_di+=w*DR[j]+S.T*DK[j]+k4*DDI[j];}
+}
+/* complex dense solve, row-major, in place */
+function csolve(n,Ar,Ai,br,bi){
+  for(let c=0;c<n;c++){
+    let piv=c,best=0;for(let r=c;r<n;r++){const v=Ar[r*n+c]**2+Ai[r*n+c]**2;if(v>best){best=v;piv=r;}}
+    if(piv!==c){for(let k=0;k<n;k++){let t=Ar[c*n+k];Ar[c*n+k]=Ar[piv*n+k];Ar[piv*n+k]=t;t=Ai[c*n+k];Ai[c*n+k]=Ai[piv*n+k];Ai[piv*n+k]=t;}
+      let t=br[c];br[c]=br[piv];br[piv]=t;t=bi[c];bi[c]=bi[piv];bi[piv]=t;}
+    const pr=Ar[c*n+c],pi=Ai[c*n+c],pd=pr*pr+pi*pi||1e-300,ir=pr/pd,ii=-pi/pd;
+    for(let r=c+1;r<n;r++){
+      const xr=Ar[r*n+c],xi=Ai[r*n+c];if(xr===0&&xi===0)continue;
+      const fr=xr*ir-xi*ii,fi=xr*ii+xi*ir;
+      const ro=r*n,co=c*n;
+      for(let k=c;k<n;k++){const ar=Ar[co+k],ai=Ai[co+k];Ar[ro+k]-=fr*ar-fi*ai;Ai[ro+k]-=fr*ai+fi*ar;}
+      br[r]-=fr*br[c]-fi*bi[c];bi[r]-=fr*bi[c]+fi*br[c];
+    }
+  }
+  for(let r=n-1;r>=0;r--){
+    let sr=br[r],si=bi[r];
+    for(let k=r+1;k<n;k++){const ar=Ar[r*n+k],ai=Ai[r*n+k];sr-=ar*br[k]-ai*bi[k];si-=ar*bi[k]+ai*br[k];}
+    const pr=Ar[r*n+r],pi=Ai[r*n+r],pd=pr*pr+pi*pi||1e-300;
+    br[r]=(sr*pr+si*pi)/pd;bi[r]=(si*pr-sr*pi)/pd;
+  }
+}
+/* solve modal amplitudes at f. Returns {idx,qr,qi,n,cA,cB} */
+function solveAt(f,Nc,noPatch){
+  const w=TWO_PI*f,lim=fLimit(f),usePatch=!noPatch&&ELEMS.length>0;
+  const idx=[],qr=[],qi=[];let cA=0,cB=0;
+  if(usePatch&&Nc>0){
+    const pos=countBelow(M.f,null,f);cA=Math.max(0,pos-(Nc>>1));cB=Math.min(M.N,cA+Nc);cA=Math.max(0,cB-Nc);
+    const n=cB-cA,Ar=new Float64Array(n*n),Ai=new Float64Array(n*n),br=new Float64Array(n),bi=new Float64Array(n);
+    const w2=w*w;
+    for(let i=0;i<n;i++){
+      const ji=cA+i;diagD(ji,w,false);Ar[i*n+i]=_dr;Ai[i*n+i]=_di;br[i]=M.c[ji];
+      const m1=M.m[ji],n1=M.n[ji],ki2=M.k[ji]*M.k[ji];
+      for(let k=i;k<n;k++){
+        const jk=cA+k,kk=ki2*M.k[jk]*M.k[jk];let er=0,ei=0;
+        for(const p of ELEMS){if(p.w<=0||p.h<=0)continue;patchPair(p,m1,n1,M.m[jk],M.n[jk]);const a=p.s*_M,b=p.s*_K;
+          er+=-w2*p.mu*a+p.D*kk*a;ei+=w*p.R*a+S.T*p.eT*b+p.D*p.eD*kk*a;}
+        Ar[i*n+k]+=er;Ai[i*n+k]+=ei;if(k!==i){Ar[k*n+i]+=er;Ai[k*n+i]+=ei;}
+      }
+    }
+    csolve(n,Ar,Ai,br,bi);
+    for(let i=0;i<n;i++){idx.push(cA+i);qr.push(br[i]);qi.push(bi[i]);}
+  }
+  const drv=M.drv;
+  for(let t=0;t<drv.length;t++){const j=drv[t];if(M.f[j]>lim)break;if(j>=cA&&j<cB)continue;
+    diagD(j,w,usePatch);const den=_dr*_dr+_di*_di,c=M.c[j];idx.push(j);qr.push(c*_dr/den);qi.push(-c*_di/den);}
+  return {idx,qr,qi,n:idx.length,cA,cB};
+}
+function solMetrics(sol,f){
+  const w=TWO_PI*f;let qdr=0,qdi=0,ms=0;
+  for(let t=0;t<sol.n;t++){const r=sol.qr[t],i=sol.qi[t],I=M.I[sol.idx[t]];ms+=r*r+i*i;if(I){qdr+=r*I;qdi+=i*I;}}
+  const Q=w*Math.hypot(qdr,qdi),p=RHO0*w*Q/TWO_PI/Math.SQRT2,v=w*Math.sqrt(ms/4)/Math.SQRT2;
+  return {spl:20*Math.log10(Math.max(p,1e-12)/2e-5),vel:20*Math.log10(Math.max(v,1e-12)),ms,qdr,qdi};
+}
+
+/* ---------- async frequency response ---------- */
+let frJob=0;
+function startFR(){
+  const id=++frJob,NF=320;
+  const fs=new Float64Array(NF),spl=new Float64Array(NF),vel=new Float64Array(NF),bare=ELEMS.length?new Float64Array(NF):null;
+  FR={fs,spl,vel,bare,done:0,NF};let i=0;
+  const step=()=>{
+    if(id!==frJob)return;const t0=performance.now();
+    while(i<NF&&performance.now()-t0<30){
+      const f=F_LO*Math.pow(F_HI/F_LO,i/(NF-1));fs[i]=f;
+      const r=solMetrics(solveAt(f,NC_FR,false),f);spl[i]=r.spl;vel[i]=r.vel;
+      if(bare)bare[i]=solMetrics(solveAt(f,0,true),f).spl;
+      i++;
+    }
+    FR.done=i;needFRdraw=true;
+    if(i<NF){setStatus(`frequency response ${Math.round(i/NF*100)}%`);setTimeout(step,0);}
+    else{setStatus(`${M.N.toLocaleString()} modes · ${PATCHES.length} patch${PATCHES.length===1?'':'es'}${S.edge&&S.edge.on?' + edge damping':''}`);startDir();}
+  };
+  step();
+}
+
+/* ---------- radiation pattern ---------- */
+const OCT=[31.5,63,125,250,500,1000,2000,4000,8000,16000];
+const OCT_LBL=['31.5','63','125','250','500','1k','2k','4k','8k','16k'];
+const OCT_COL=['#6a3d9a','#8c4fb8','#4f63c9','#3a8fd0','#2fb3b3','#4cc38a','#9ccf4a','#e0c93b','#f29b38','#ef5f45'];
+let DIR=null,dirJob=0,baffle='dipole',octOn=OCT.map(()=>true);
+const STEP=2,NANG=91,DIR_NS=24; // front -90..+90 deg in 2 deg steps
+let octSel=5;
+function Xft(a,L,parity,kx){
+  const den=a*a-kx*kx;
+  if(Math.abs(den)<1e-9*a*a){_xr=0;_xi=kx>0?-L/2:L/2;return;}
+  const c=Math.cos(kx*L),s=Math.sin(kx*L);
+  _xr=a*(1-parity*c)/den;_xi=a*(parity*s)/den;
+}
+let _xr=0,_xi=0;
+function planePattern(coef,maxIdx,L,k,out,cosF){
+  for(let ia=0;ia<NANG;ia++){
+    const th=(ia*STEP-90)*Math.PI/180,kx=k*Math.sin(th);let sr=0,si=0;
+    for(let m=1;m<=maxIdx;m++){const cr=coef[2*m],ci=coef[2*m+1];if(cr===0&&ci===0)continue;
+      Xft(m*Math.PI/L,L,(m&1)?-1:1,kx);sr+=cr*_xr-ci*_xi;si+=cr*_xi+ci*_xr;}
+    let p2=sr*sr+si*si;if(cosF){const c=Math.cos(th);p2*=c*c;}
+    out[ia]+=p2;
+  }
+}
+function startDir(){
+  const id=++dirJob;
+  DIR={x:[],y:[],done:0};let b=0;
+  const step=()=>{
+    if(id!==dirJob||!M)return;
+    const fc=OCT[b],px=new Float64Array(NANG),py=new Float64Array(NANG);let nm=0;
+    for(let s=0;s<DIR_NS;s++){
+      const f=Math.min(M.fCut*0.98,fc*Math.pow(2,(s+0.5)/DIR_NS-0.5)),w=TWO_PI*f,k=w/C0;
+      const sol=solveAt(f,NC_FR,false);nm+=sol.n;
+      const A=new Float64Array(2*(M.Mmax+1)),B=new Float64Array(2*(M.Nmax+1));
+      for(let t=0;t<sol.n;t++){const j=sol.idx[t],m=M.m[j],n=M.n[j],qr=sol.qr[t]*w*w,qi=sol.qi[t]*w*w;
+        if(n&1){const Y0=2*S.Ly/(n*Math.PI);A[2*m]+=qr*Y0;A[2*m+1]+=qi*Y0;}
+        if(m&1){const X0=2*S.Lx/(m*Math.PI);B[2*n]+=qr*X0;B[2*n+1]+=qi*X0;}}
+      planePattern(A,M.Mmax,S.Lx,k,px,baffle==='dipole');
+      planePattern(B,M.Nmax,S.Ly,k,py,baffle==='dipole');
+    }
+    DIR.x[b]=toDb(px);DIR.y[b]=toDb(py);DIR.x[b].modes=Math.round(nm/DIR_NS);DIR.x[b].mo=modalOverlap(fc);
+    b++;DIR.done=b;drawDir();
+    if(b<OCT.length)setTimeout(step,0);
+  };
+  setTimeout(step,0);
+}
+/* full circle 0..358 in 2 deg steps, angle measured from front axis; returns dB re on-axis (null = no radiation) */
+function toDb(p){
+  const c0=(NANG-1)/2,ref=p[c0]>0?p[c0]:Math.max(...p)||1e-300;
+  const full=new Array(180);
+  for(let i=0;i<180;i++){const ang=i*STEP;let th=ang>180?ang-360:ang;let val=null;
+    if(Math.abs(th)<=90){val=p[c0+th/STEP];}
+    else if(baffle==='dipole'){const fr=th>0?180-th:-180-th;val=p[c0+fr/STEP];}
+    full[i]=val===null?null:10*Math.log10(Math.max(val,1e-300)/ref);}
+  let mx=-1e9,ma=0;for(let i=0;i<NANG;i++){const d=10*Math.log10(Math.max(p[i],1e-300)/ref);if(d>mx){mx=d;ma=(i-c0)*STEP;}}
+  return {full,dip:mx,dipAng:ma};
+}
+function polarBase(c,rng){
+  const x=c.getContext('2d'),W=c.width,dpr=window.devicePixelRatio||1,cx=W/2,cy=W/2,R=W/2-28*dpr;
+  x.clearRect(0,0,W,W);x.font=`${10*dpr}px IBM Plex Mono, monospace`;x.textAlign='center';
+  for(let d=0;d>=-rng;d-=(rng>30?10:5)){const r=R*(1+d/rng);x.strokeStyle=d===0?'#2c3a4c':'#1f2a37';x.lineWidth=1;x.beginPath();x.arc(cx,cy,Math.max(r,0.1),0,TWO_PI);x.stroke();
+    if(d<0&&d>-rng){x.fillStyle='#55657a';x.fillText(d,cx+12*dpr,cy-r+11*dpr);}}
+  for(let a=0;a<360;a+=30){const t=a*Math.PI/180;x.strokeStyle='#1a2330';x.beginPath();x.moveTo(cx,cy);x.lineTo(cx+R*Math.sin(t),cy-R*Math.cos(t));x.stroke();
+    x.fillStyle='#8794a6';x.fillText(a+'°',cx+(R+14*dpr)*Math.sin(t),cy-(R+14*dpr)*Math.cos(t)+3*dpr);}
+  x.fillStyle='#55657a';x.textAlign='left';x.fillText('front',cx+6*dpr,cy-R*0.45);x.fillText(baffle==='dipole'?'rear (inverted)':'behind baffle',cx+6*dpr,cy+R*0.5);
+  return {x,cx,cy,R,dpr};
+}
+function polarCurve(g,full,col,lw,dots,rng){
+  const {x,cx,cy,R,dpr}=g;const rr=db=>R*Math.max(0,1+Math.min(5,Math.max(db,-rng))/rng);
+  x.strokeStyle=col;x.lineWidth=lw*dpr;x.beginPath();let pen=false;
+  for(let k=0;k<=180;k++){const i=k%180,v=full[i];if(v===null){pen=false;continue;}
+    const t=i*STEP*Math.PI/180,r=rr(v),X=cx+r*Math.sin(t),Y=cy-r*Math.cos(t);pen?x.lineTo(X,Y):x.moveTo(X,Y);pen=true;}
+  x.stroke();
+  if(dots){x.fillStyle=col;for(let i=0;i<180;i++){const v=full[i];if(v===null)continue;const t=i*STEP*Math.PI/180,r=rr(v);x.beginPath();x.arc(cx+r*Math.sin(t),cy-r*Math.cos(t),1.7*dpr,0,TWO_PI);x.fill();}}
+}
+function rangeDb(){return +$('dbRange').value;}
+function drawPolar(c,key){
+  const rng=rangeDb(),g=polarBase(c,rng);
+  for(let b=0;b<DIR.done;b++){if(!octOn[b])continue;polarCurve(g,DIR[key][b].full,OCT_COL[b],1.5,false,rng);}
+}
+function drawRadar(){
+  const c=$('radar'),rng=rangeDb(),g=polarBase(c,rng);
+  $('ptO').textContent=`${OCT_LBL[octSel]} Hz octave, both planes, each 2° sample marked`;
+  if(octSel>=DIR.done)return;
+  polarCurve(g,DIR.x[octSel].full,'#ff9d42',1.6,true,rng);polarCurve(g,DIR.y[octSel].full,'#4cc9e8',1.6,true,rng);
+}
+function sizePolar(){const dpr=window.devicePixelRatio||1;document.querySelectorAll('canvas.polar').forEach(c=>{const w=Math.round(c.clientWidth*dpr);c.width=w;c.height=w;});}
+const fmtDb=v=>v===null?'':v<-60?'<−60':v.toFixed(1);
+function drawAngTable(){
+  const lx=`${S.Lx} m`,ly=`${S.Ly} m`;
+  if(octSel>=DIR.done){$('angTable').innerHTML='<tr><td class="dim">computing…</td></tr>';return;}
+  const X=DIR.x[octSel].full,Y=DIR.y[octSel].full;
+  let h=`<thead><tr><th>Angle</th><th>Along ${lx} side (dB)</th><th>Along ${ly} side (dB)</th><th>Angle</th><th>Along ${lx}</th><th>Along ${ly}</th></tr></thead><tbody>`;
+  for(let i=0;i<90;i++){const j=i+90;
+    h+=`<tr><td class="dim">${i*STEP}°</td><td>${fmtDb(X[i])}</td><td>${fmtDb(Y[i])}</td><td class="dim">${j*STEP}°</td><td>${fmtDb(X[j])}</td><td>${fmtDb(Y[j])}</td></tr>`;}
+  $('angTable').innerHTML=h+'</tbody>';
+}
+function csvAll(){
+  let out='angle_deg';for(const k of ['x','y'])for(let b=0;b<OCT.length;b++)out+=`,${k==='x'?'long':'short'}_${OCT_LBL[b]}Hz_dB`;out+='\n';
+  for(let i=0;i<180;i++){out+=i*STEP;for(const k of ['x','y'])for(let b=0;b<OCT.length;b++){const v=b<DIR.done?DIR[k][b].full[i]:null;out+=','+(v===null?'':v.toFixed(2));}out+='\n';}
+  return out;
+}
+function drawDir(){
+  if(!DIR||!M)return;
+  const lx=`${S.Lx} m side`,ly=`${S.Ly} m side`;
+  $('ptX').textContent=`Plane along the ${lx} (x–z), all octaves`;$('ptY').textContent=`Plane along the ${ly} (y–z), all octaves`;
+  $('rkX').textContent=`Along ${lx}`;$('rkY').textContent=`Along ${ly}`;
+  drawPolar($('polX'),'x');drawPolar($('polY'),'y');drawRadar();drawAngTable();
+  let h='';for(let b=0;b<OCT.length;b++){
+    if(b>=DIR.done){h+=`<tr><td>${OCT_LBL[b]} Hz</td><td colspan="3" class="dim">computing…</td></tr>`;continue;}
+    const X=DIR.x[b],Y=DIR.y[b];
+    h+=`<tr><td><span class="chip" style="padding:0 8px;border:0;background:none"><i style="background:${OCT_COL[b]}"></i>${OCT_LBL[b]} Hz</span></td><td class="dim">${X.modes.toLocaleString()}</td><td style="color:${X.mo>=1?'var(--good)':'var(--warn)'}">${X.mo<10?X.mo.toFixed(2):X.mo.toFixed(0)}</td><td>${noteDip(X,'x')}${noteDip(Y,'y')}</td></tr>`;}
+  $('dirBody').innerHTML=h;
+  $('dirHint').textContent=`Built from the full modal solution: each mode's amplitude (drive coupling, air load and patches included) is transformed to the far field, so modal lobes and cancellations shape the pattern. `+(baffle==='dipole'?'Unbaffled: |cos θ| obliquity applied, rear lobe mirrored. ':'Infinite baffle: front hemisphere only. ')+
+    `0 dB = on-axis level of each octave. The beam narrows once a wavelength gets shorter than a side: along ${S.Lx} m above about ${fmtF(C0/S.Lx)}, along ${S.Ly} m above about ${fmtF(C0/S.Ly)}.`+(DIR.done<OCT.length?` Computing ${DIR.done}/${OCT.length} octaves…`:'');
+}
+/* DML: modal overlap = driven-mode density × half-power bandwidth (η f) */
+function modalOverlap(f){const f1=f/Math.SQRT2,f2=f*Math.SQRT2;const n=(countBelow(M.f,M.drv,f2)-countBelow(M.f,M.drv,f1))/(f2-f1);return n*S.eta*f;}
+function overlapTransition(){let lo=20,hi=20000;if(modalOverlap(lo)>=1)return lo;if(modalOverlap(hi)<1)return null;
+  for(let i=0;i<40;i++){const m=Math.sqrt(lo*hi);if(modalOverlap(m)<1)lo=m;else hi=m;}return Math.sqrt(lo*hi);}
+function noteDip(d,ax){if(d.dip<3)return '';return `<span style="color:var(--warn)">${ax==='x'?'long':'short'} axis: on-axis dip, off-axis lobe +${d.dip.toFixed(1)} dB at ${d.dipAng>0?'+':''}${d.dipAng}°</span> `;}
+function renderOctSel(){$('octSel').innerHTML=OCT_LBL.map((l,i)=>`<option value="${i}"${i===octSel?' selected':''}>${l} Hz</option>`).join('');}
+$('octSel').addEventListener('change',e=>{octSel=+e.target.value;drawDir();});
+$('dbRange').addEventListener('change',()=>drawDir());
+$('copyCsv').addEventListener('click',()=>{const t=csvAll();const ok=()=>{$('copyMsg').textContent='Copied (180 angles × 20 columns).';};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(ok,()=>fallbackCopy(t));else fallbackCopy(t);});
+function fallbackCopy(t){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();let ok=false;try{ok=document.execCommand('copy');}catch(e){}ta.remove();$('copyMsg').textContent=ok?'Copied.':'Copy was blocked by the browser.';}
+function renderChips(){
+  $('octChips').innerHTML=OCT.map((f,i)=>`<span class="chip${octOn[i]?'':' off'}" data-o="${i}"><i style="background:${OCT_COL[i]}"></i>${OCT_LBL[i]}</span>`).join('')+
+    '<span class="chip" data-o="all">all</span><span class="chip" data-o="none">none</span>';
+}
+$('octChips').addEventListener('click',e=>{const c=e.target.closest('[data-o]');if(!c)return;const o=c.dataset.o;
+  if(o==='all')octOn=octOn.map(()=>true);else if(o==='none')octOn=octOn.map(()=>false);else octOn[+o]=!octOn[+o];renderChips();drawDir();});
+$('baffSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;baffle=b.dataset.b;
+  document.querySelectorAll('#baffSeg button').forEach(x=>x.classList.toggle('on',x.dataset.b===baffle));startDir();});
+
+/* ---------- spatial grid ---------- */
+function buildGrid(){
+  const Nx=S.res,Ny=Math.max(16,Math.min(1200,Math.round(Nx*S.Ly/S.Lx)));
+  const Sx=new Float32Array((M.Mmax+1)*Nx),Sy=new Float32Array((M.Nmax+1)*Ny);
+  for(let m=1;m<=M.Mmax;m++){const o=m*Nx;for(let x=0;x<Nx;x++)Sx[o+x]=Math.sin(m*Math.PI*(x+0.5)/Nx);}
+  for(let n=1;n<=M.Nmax;n++){const o=n*Ny;for(let y=0;y<Ny;y++)Sy[o+y]=Math.sin(n*Math.PI*(y+0.5)/Ny);}
+  G={Nx,Ny,Sx,Sy};
+  G.off=document.createElement('canvas');G.off.width=Nx;G.off.height=Ny;
+  G.ctx=G.off.getContext('2d');G.img=G.ctx.createImageData(Nx,Ny);
+}
+function computeField(){
+  const {Nx,Ny,Sx,Sy}=G;const Wr=new Float32Array(Nx*Ny),Wi=new Float32Array(Nx*Ny);
+  let fShow,used=0;SOL=null;
+  if(view==='mode'&&selMode>=0){
+    const j=selMode,m=M.m[j],n=M.n[j];fShow=M.f[j];
+    for(let y=0;y<Ny;y++){const s=Sy[n*Ny+y],r=y*Nx;for(let x=0;x<Nx;x++)Wr[r+x]=s*Sx[m*Nx+x];}
+    used=1;
+  }else{
+    fShow=freq;const sol=solveAt(freq,NC_FIELD,false);SOL=sol;used=sol.n;
+    const Br=new Float32Array((M.Nmax+1)*Nx),Bi=new Float32Array((M.Nmax+1)*Nx),un=new Uint8Array(M.Nmax+1);
+    for(let t=0;t<sol.n;t++){const j=sol.idx[t],qr=sol.qr[t],qi=sol.qi[t],so=M.m[j]*Nx,n=M.n[j],bo=n*Nx;un[n]=1;
+      for(let x=0;x<Nx;x++){const s=Sx[so+x];Br[bo+x]+=qr*s;Bi[bo+x]+=qi*s;}}
+    for(let n=1;n<=M.Nmax;n++){if(!un[n])continue;const bo=n*Nx,yo=n*Ny;
+      for(let y=0;y<Ny;y++){const s=Sy[yo+y],r=y*Nx;
+        for(let x=0;x<Nx;x++){Wr[r+x]+=s*Br[bo+x];Wi[r+x]+=s*Bi[bo+x];}}}
+  }
+  const L=Nx*Ny,step=Math.max(1,Math.floor(L/40000)),samp=[];let amax=0;
+  for(let i=0;i<L;i+=step)samp.push(Math.hypot(Wr[i],Wi[i]));
+  for(let i=0;i<L;i++){const a=Wr[i]*Wr[i]+Wi[i]*Wi[i];if(a>amax)amax=a;}
+  samp.sort((a,b)=>a-b);
+  let scale=samp[Math.floor(samp.length*0.995)]||0;if(scale<=0)scale=Math.sqrt(amax)||1;
+  FLD={Wr,Wi,f:fShow,scale,amax:Math.sqrt(amax),used};
+}
+
+/* ---------- colour maps ---------- */
+function mkLUT(stops){const L=new Uint8Array(256*3);
+  for(let i=0;i<256;i++){const t=i/255;let s=0;while(s<stops.length-2&&t>stops[s+1][0])s++;
+    const a=stops[s],b=stops[s+1],u=(t-a[0])/(b[0]-a[0]||1);
+    for(let c=0;c<3;c++)L[i*3+c]=Math.round(a[1][c]+(b[1][c]-a[1][c])*u);}return L;}
+const LUT_DIV=mkLUT([[0,[120,220,255]],[0.25,[30,110,210]],[0.5,[10,13,20]],[0.75,[215,95,25]],[1,[255,225,130]]]);
+const LUT_SEQ=mkLUT([[0,[8,10,16]],[0.3,[70,25,110]],[0.6,[200,60,70]],[0.85,[250,160,40]],[1,[252,250,190]]]);
+function drawCbar(){const c=$('cbar'),x=c.getContext('2d'),L=disp==='snap'?LUT_DIV:LUT_SEQ;
+  for(let i=0;i<180;i++){const k=Math.round(i/179*255)*3;x.fillStyle=`rgb(${L[k]},${L[k+1]},${L[k+2]})`;x.fillRect(i,0,1,10);}}
+
+/* ---------- rendering ---------- */
+function fmtAmp(m){const a=Math.abs(m);if(a>=1e-3)return (m*1e3).toPrecision(3)+' mm';if(a>=1e-6)return (m*1e6).toPrecision(3)+' µm';return (m*1e9).toPrecision(3)+' nm';}
+function fmtF(f){return f>=1000?(f/1000).toFixed(f>=10000?2:3)+' kHz':f.toFixed(f<100?2:1)+' Hz';}
+function layoutMem(){
+  const wrap=$('canvwrap'),cw=wrap.clientWidth-20,maxH=Math.min(window.innerHeight*0.6,560);
+  let w=cw,h=cw*S.Ly/S.Lx,str='';
+  if(h>maxH){h=maxH;w=h*S.Lx/S.Ly;}
+  if(h<140){str=`y stretched ×${(140/h).toFixed(1)}`;h=140;}
+  const c=$('mem'),dpr=window.devicePixelRatio||1;
+  c.style.width=w+'px';c.style.height=h+'px';c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);
+  $('axisInfo').textContent=`${S.Lx} m × ${S.Ly} m`+(str?' · '+str:'');$('axisX').textContent=`x = ${S.Lx} m`;
+  const xs=$('xsec');xs.width=Math.round(xs.clientWidth*dpr);xs.height=Math.round(110*dpr);
+  const fr=$('fr');fr.width=Math.round(fr.clientWidth*dpr);fr.height=Math.round(300*dpr);
+}
+function toPx(c,x,y){return [x/S.Lx*c.width,(1-y/S.Ly)*c.height];}
+function drawShape(x,c,sh,cx,cy,w,h,d){
+  const [px,py]=toPx(c,cx,cy);x.beginPath();
+  if(sh==='rect'){const W=w/S.Lx*c.width,H=h/S.Ly*c.height;x.rect(px-W/2,py-H/2,W,H);}
+  else{x.ellipse(px,py,d/2/S.Lx*c.width,d/2/S.Ly*c.height,0,0,TWO_PI);}
+}
+function renderMem(){
+  if(!FLD||!G)return;
+  const {Nx,Ny}=G,{Wr,Wi,scale}=FLD,d=G.img.data,inv=1/scale;
+  const cp=Math.cos(phase),sp=Math.sin(phase);
+  if(disp==='snap'){
+    for(let i=0,L=Nx*Ny;i<L;i++){let u=(Wr[i]*cp-Wi[i]*sp)*inv;u=u>1?1:u<-1?-1:u;
+      const k=((u*0.5+0.5)*255+0.5|0)*3,o=i*4;d[o]=LUT_DIV[k];d[o+1]=LUT_DIV[k+1];d[o+2]=LUT_DIV[k+2];d[o+3]=255;}
+  }else{
+    for(let i=0,L=Nx*Ny;i<L;i++){let u=Math.sqrt(Wr[i]*Wr[i]+Wi[i]*Wi[i])*inv;u=u>1?1:u;
+      const k=(u*255+0.5|0)*3,o=i*4;d[o]=LUT_SEQ[k];d[o+1]=LUT_SEQ[k+1];d[o+2]=LUT_SEQ[k+2];d[o+3]=255;}
+  }
+  G.ctx.putImageData(G.img,0,0);
+  const c=$('mem'),x=c.getContext('2d'),dpr=window.devicePixelRatio||1;x.imageSmoothingEnabled=true;
+  x.save();x.translate(0,c.height);x.scale(1,-1);x.drawImage(G.off,0,0,c.width,c.height);x.restore();
+  // edge band
+  if(S.edge&&S.edge.on){const L=S.edge.graded?5:1;
+    for(let l=0;l<L;l++){const d0=S.edge.w*l/L,d1=S.edge.w*(l+1)/L,a=S.edge.graded?0.30*(L-l)/L:0.22;
+      const ox=d0/S.Lx*c.width,oy=d0/S.Ly*c.height,ix=d1/S.Lx*c.width,iy=d1/S.Ly*c.height;
+      x.fillStyle=`rgba(203,166,247,${a})`;x.beginPath();x.rect(ox,oy,c.width-2*ox,c.height-2*oy);x.rect(ix,iy,c.width-2*ix,c.height-2*iy);x.fill('evenodd');}
+    const ix=S.edge.w/S.Lx*c.width,iy=S.edge.w/S.Ly*c.height;x.strokeStyle='#cba6f7';x.lineWidth=1*dpr;x.setLineDash([3*dpr,3*dpr]);x.strokeRect(ix,iy,c.width-2*ix,c.height-2*iy);x.setLineDash([]);}
+  // patches
+  PATCHES.forEach((p,i)=>{drawShape(x,c,p.shape,p.cx,p.cy,p.w,p.h,p.d);
+    x.fillStyle=i===dragIdx?'rgba(166,227,161,0.30)':'rgba(166,227,161,0.14)';x.fill();
+    x.strokeStyle='#a6e3a1';x.lineWidth=1.5*dpr;x.stroke();
+    const [px,py]=toPx(c,p.cx,p.cy);x.fillStyle='#a6e3a1';x.font=`${11*dpr}px IBM Plex Mono, monospace`;x.textAlign='center';x.fillText(i+1,px,py+4*dpr);});
+  // drive
+  const dv=S.drive,X0=S.dx*S.Lx,Y0=S.dy*S.Ly,[px,py]=toPx(c,X0,Y0);
+  x.strokeStyle='#fff';x.lineWidth=1.5*dpr;
+  if(dv.shape!=='point'){x.setLineDash([4*dpr,3*dpr]);drawShape(x,c,dv.shape,X0,Y0,dv.w,dv.h,dv.d);x.stroke();x.setLineDash([]);}
+  const r=4*dpr;x.beginPath();x.moveTo(px-r*2,py);x.lineTo(px+r*2,py);x.moveTo(px,py-r*2);x.lineTo(px,py+r*2);x.stroke();
+  renderXsec(cp,sp);
+}
+function renderXsec(cp,sp){
+  const c=$('xsec'),x=c.getContext('2d'),W=c.width,H=c.height;x.clearRect(0,0,W,H);
+  const {Nx,Ny}=G,{Wr,Wi,scale}=FLD,row=Math.min(Ny-1,Math.floor(S.dy*Ny))*Nx,mid=H/2,a=(H/2-8)/scale,y0=S.dy*S.Ly;
+  x.fillStyle='rgba(166,227,161,0.12)';
+  for(const p of PATCHES){let x1,x2;
+    if(p.shape==='rect'){if(Math.abs(y0-p.cy)>p.h/2)continue;x1=p.cx-p.w/2;x2=p.cx+p.w/2;}
+    else{const R=p.d/2,dy=y0-p.cy;if(Math.abs(dy)>=R)continue;const hc=Math.sqrt(R*R-dy*dy);x1=p.cx-hc;x2=p.cx+hc;}
+    x.fillRect(x1/S.Lx*W,0,(x2-x1)/S.Lx*W,H);}
+  if(S.edge&&S.edge.on){const ew=S.edge.w;x.fillStyle='rgba(203,166,247,0.14)';
+    if(y0<ew||y0>S.Ly-ew)x.fillRect(0,0,W,H);else{x.fillRect(0,0,ew/S.Lx*W,H);x.fillRect(W-ew/S.Lx*W,0,ew/S.Lx*W,H);}}
+  x.strokeStyle='#243040';x.lineWidth=1;x.beginPath();x.moveTo(0,mid);x.lineTo(W,mid);x.stroke();
+  x.fillStyle='rgba(58,74,94,0.55)';x.beginPath();
+  for(let i=0;i<Nx;i++){const e=Math.min(scale,Math.hypot(Wr[row+i],Wi[row+i]));const X=(i+0.5)/Nx*W;i?x.lineTo(X,mid-e*a):x.moveTo(X,mid-e*a);}
+  for(let i=Nx-1;i>=0;i--){const e=Math.min(scale,Math.hypot(Wr[row+i],Wi[row+i]));x.lineTo((i+0.5)/Nx*W,mid+e*a);}
+  x.closePath();x.fill();
+  x.strokeStyle='#ff9d42';x.lineWidth=1.4*(window.devicePixelRatio||1);x.beginPath();
+  for(let i=0;i<Nx;i++){let v=Wr[row+i]*cp-Wi[row+i]*sp;v=Math.max(-scale,Math.min(scale,v));const X=(i+0.5)/Nx*W;i?x.lineTo(X,mid-v*a):x.moveTo(X,mid-v*a);}
+  x.stroke();
+}
+function drawFR(){
+  if(!FR||!M)return;const c=$('fr'),x=c.getContext('2d'),W=c.width,H=c.height,dpr=window.devicePixelRatio||1;
+  x.clearRect(0,0,W,H);
+  const padL=44*dpr,padR=44*dpr,padT=12*dpr,padB=34*dpr,pw=W-padL-padR,ph=H-padT-padB,n=FR.done;
+  const fx=f=>padL+Math.log(f/F_LO)/Math.log(F_HI/F_LO)*pw;
+  let smax=-1e9,vmax=-1e9;for(let i=0;i<n;i++){smax=Math.max(smax,FR.spl[i]);vmax=Math.max(vmax,FR.vel[i]);if(FR.bare)smax=Math.max(smax,FR.bare[i]);}
+  if(n===0){smax=100;vmax=0;}
+  const span=70,sTop=Math.ceil((smax+5)/10)*10,vTop=Math.ceil((vmax+5)/10)*10;
+  const sy=v=>padT+(sTop-v)/span*ph,vy=v=>padT+(vTop-v)/span*ph;
+  x.font=`${10*dpr}px IBM Plex Mono, monospace`;x.lineWidth=1;
+  for(let d=0;d<=span;d+=10){const Y=padT+d/span*ph;x.strokeStyle='#1b2430';x.beginPath();x.moveTo(padL,Y);x.lineTo(W-padR,Y);x.stroke();
+    x.fillStyle='#b77a3c';x.textAlign='right';x.fillText((sTop-d).toFixed(0),padL-5*dpr,Y+3*dpr);
+    x.fillStyle='#3d9ab3';x.textAlign='left';x.fillText((vTop-d).toFixed(0),W-padR+5*dpr,Y+3*dpr);}
+  x.textAlign='center';x.fillStyle='#8794a6';
+  [20,50,100,200,500,1000,2000,5000,10000,20000].forEach(f=>{const X=fx(f);x.strokeStyle='#1b2430';x.beginPath();x.moveTo(X,padT);x.lineTo(X,padT+ph);x.stroke();
+    x.fillText(f>=1000?(f/1000)+'k':f,X,H-padB+14*dpr);});
+  x.fillText('Hz',W-padR+18*dpr,H-padB+14*dpr);
+  x.save();x.translate(11*dpr,padT+ph/2);x.rotate(-Math.PI/2);x.fillStyle='#b77a3c';x.fillText('dB SPL',0,0);x.restore();
+  x.strokeStyle='rgba(110,128,150,0.45)';x.beginPath();
+  const nb=countBelow(M.f,M.drv,F_HI),stepT=Math.max(1,Math.floor(nb/2500));
+  for(let t=0;t<nb;t+=stepT){const f=M.f[M.drv[t]];if(f<F_LO)continue;const X=fx(f);x.moveTo(X,padT+ph);x.lineTo(X,padT+ph-6*dpr);}
+  x.stroke();
+  const line=(arr,yf,col,lw)=>{if(n<2)return;x.strokeStyle=col;x.lineWidth=lw*dpr;x.beginPath();for(let i=0;i<n;i++){const X=fx(FR.fs[i]),Y=Math.max(padT,Math.min(padT+ph,yf(arr[i])));i?x.lineTo(X,Y):x.moveTo(X,Y);}x.stroke();};
+  if(FR.bare)line(FR.bare,sy,'#6b5a48',1.2);
+  line(FR.vel,vy,'#4cc9e8',1.6);line(FR.spl,sy,'#ff9d42',1.6);
+  const fc=view==='mode'&&selMode>=0?M.f[selMode]:freq;
+  if(fc>=F_LO&&fc<=F_HI){const X=fx(fc);x.strokeStyle='#ffffff';x.setLineDash([4*dpr,3*dpr]);x.lineWidth=1*dpr;x.beginPath();x.moveTo(X,padT);x.lineTo(X,padT+ph);x.stroke();x.setLineDash([]);}
+  if(n<FR.NF){x.fillStyle='#8794a6';x.textAlign='right';x.fillText(`computing ${Math.round(n/FR.NF*100)}%`,W-padR-6*dpr,padT+14*dpr);}
+  FR.geom={padL,pw,dpr};
+  $('keyBare').style.display=FR.bare?'':'none';
+}
+
+/* ---------- tables & text ---------- */
+function updateTitle(){
+  let t;
+  if(view==='mode'&&selMode>=0){const j=selMode;
+    t=`Mode <b>(${M.m[j]}, ${M.n[j]})</b> · ${fmtF(M.f[j])}${S.air?` (${fmtF(M.fv[j])} in vacuum)`:''} · `+(Math.abs(M.c[j])>1e-9?`coupling ${M.c[j].toFixed(3)}`:'<span style="color:var(--warn)">not excited by this drive</span>')+' · bare-film shape, normalised';
+    $('cbMin').textContent='−1';$('cbMax').textContent='+1';$('cbNote').textContent='';
+  }else{
+    let extra='';if(SOL&&SOL.cB>SOL.cA)extra=` · ${SOL.cB-SOL.cA} modes fully coupled by patches (${fmtF(M.f[SOL.cA])}–${fmtF(M.f[SOL.cB-1])})`;
+    t=`Forced response at <b>${fmtF(freq)}</b> · ${FLD?FLD.used.toLocaleString():0} modes summed${extra}`;
+    const s=FLD?FLD.scale:0;$('cbMin').textContent=disp==='snap'?'−'+fmtAmp(s):'0';$('cbMax').textContent=(disp==='snap'?'+':'')+fmtAmp(s);
+    $('cbNote').textContent='· clipped at 99.5th percentile; overall peak '+fmtAmp(FLD?FLD.amax:0);
+  }
+  $('viewTitle').innerHTML=t;
+  const fNow=view==='mode'&&selMode>=0?M.f[selMode]:freq,k=kAt(fNow),lam=TWO_PI/k,pxPerLam=lam/(S.Lx/G.Nx);
+  $('warnRes').textContent=pxPerLam<3?`Film wavelength ${(lam*1e3).toFixed(1)} mm is only ${pxPerLam.toFixed(1)} px on this grid, so the fine pattern will alias. Raise the image resolution.`:'';
+}
+function updateStats(){
+  const k11=Math.hypot(Math.PI/S.Lx,Math.PI/S.Ly),f11=fres(k11),f11v=k11*S.cm/TWO_PI;
+  const nAll=countBelow(M.f,null,F_HI),nDrv=countBelow(M.f,M.drv,F_HI);
+  const fNow=freq,f1=fNow*0.95,f2=fNow*1.05,dens=(countBelow(M.f,null,f2)-countBelow(M.f,null,f1))/(f2-f1);
+  const kN=kAt(fNow);airLoad(kN,TWO_PI*fNow);const ratio=_ma/S.sigma;
+  const dv=S.drive;let dcut='point force: no spatial filtering';
+  if(dv.shape==='round'){const kc=3.8317/(dv.d/2);dcut=`first coupling null near ${fmtF(fres(kc))}`;}
+  else if(dv.shape==='rect'){const kc=TWO_PI/Math.max(dv.w,dv.h);dcut=`first coupling null near ${fmtF(fres(kc))}`;}
+  const tiles=[
+    ['Film surface mass',(S.sigma*1e3).toFixed(2)+' g/m²',`ρh = ${S.rho} × ${(S.h*1e6).toFixed(1)} µm`],
+    ['Wave speed √(T/σ)',S.cm.toFixed(1)+' m/s',S.cm<C0?'slower than sound (343 m/s)':'faster than sound'],
+    ['Fundamental (1,1)',fmtF(f11),S.air?`${fmtF(f11v)} in vacuum`:'vacuum'],
+    ['Modes ≤ 20 kHz',nAll.toLocaleString(),`${nDrv.toLocaleString()} excited by this drive`],
+    ['Modal density at f',dens.toFixed(dens<1?3:1)+' /Hz',`at ${fmtF(fNow)}`],
+    ['Film wavelength at f',(TWO_PI/kN*1e3).toFixed(1)+' mm',S.air?`air mass ${ratio.toFixed(ratio<10?2:0)}× film mass`:'no air loading'],
+    (()=>{const ft=overlapTransition(),mo=modalOverlap(fNow);return ['DML modal overlap at f',mo<10?mo.toFixed(2):mo.toFixed(0),ft?`driven modes overlap (≥1) above ${fmtF(ft)}`:'driven modes never overlap below 20 kHz'];})(),
+    ['Drive size',dv.shape==='point'?'point':dv.shape==='round'?`⌀ ${(dv.d*100).toFixed(1)} cm`:`${(dv.w*100).toFixed(1)} × ${(dv.h*100).toFixed(1)} cm`,dcut],
+  ];
+  $('stats').innerHTML=tiles.map(t=>`<div class="stat"><div class="k">${t[0]}</div><div class="v">${t[1]}</div><div class="s">${t[2]}</div></div>`).join('');
+  $('warnModes').textContent=M.capped?`The mode count was capped for speed. Modes are solved up to ${fmtF(M.fCut)}, so the top of the band is truncated.`:'';
+}
+function updateTable(){
+  const only=$('onlyDriven').checked,list=only?M.drv:null,len=only?M.drv.length:M.N;
+  const fNow=view==='mode'&&selMode>=0?M.f[selMode]:freq;
+  const pos=countBelow(M.f,list,fNow),a=Math.max(0,pos-12),b=Math.min(len,pos+28);
+  let h='',closest=-1,best=1e99;
+  for(let t=a;t<b;t++){const j=list?list[t]:t;const d=Math.abs(Math.log(M.f[j]/fNow));if(d<best){best=d;closest=j;}}
+  for(let t=a;t<b;t++){const j=list?list[t]:t,c=M.c[j],drv=Math.abs(c)>1e-9;
+    const cls=['r',j===selMode&&view==='mode'?'sel':'',j===closest?'cur':''].join(' ');
+    h+=`<tr class="${cls}" data-j="${j}"><td>(${M.m[j]}, ${M.n[j]})</td><td>${M.f[j].toFixed(1)}</td><td class="dim">${M.fv[j].toFixed(1)}</td><td>${(TWO_PI/M.k[j]*1e3).toFixed(1)}</td>`+
+      `<td>${drv?`<span class="cbarw" style="width:${Math.max(2,Math.min(1,Math.abs(c))*60)}px"></span> ${Math.abs(c).toFixed(3)}`:'<span class="dim">— node</span>'}</td><td>${M.I[j]?'<span style="color:var(--good)">yes</span>':'<span class="dim">0</span>'}</td></tr>`;}
+  $('tbody').innerHTML=h||'<tr><td colspan="6" class="dim">No modes in range</td></tr>';
+  const cur=$('tbody').querySelector('tr.cur, tr.sel');if(cur){const tw=cur.closest('.tablewrap');tw.scrollTop=cur.offsetTop-tw.clientHeight/2;}
+}
+function updateDominant(){
+  const body=$('domBody');
+  if(view==='mode'||!SOL){body.innerHTML='<tr><td colspan="6" class="dim">Switch to Forced response to rank modes.</td></tr>';$('domHint').textContent='';return;}
+  const sol=SOL;let tot=0,qdr=0,qdi=0;
+  const e=new Float64Array(sol.n);
+  for(let t=0;t<sol.n;t++){e[t]=sol.qr[t]**2+sol.qi[t]**2;tot+=e[t];const I=M.I[sol.idx[t]];qdr+=sol.qr[t]*I;qdi+=sol.qi[t]*I;}
+  const Qm=Math.hypot(qdr,qdi)||1e-300;
+  const ord=Array.from({length:sol.n},(_,i)=>i).sort((a,b)=>e[b]-e[a]).slice(0,12);
+  let cum=0,n90=0;{const all=Array.from(e).sort((a,b)=>b-a);for(const v of all){cum+=v;n90++;if(cum>=0.9*tot)break;}}
+  $('domHint').textContent=`${n90.toLocaleString()} mode${n90===1?'':'s'} carry 90% of the motion at ${fmtF(freq)}. Tap a row to view the mode's bare-film shape.`;
+  body.innerHTML=ord.map((t,r)=>{const j=sol.idx[t],sh=e[t]/tot,I=M.I[j],sp=Math.hypot(sol.qr[t]*I,sol.qi[t]*I)/Qm,ph=Math.atan2(sol.qi[t],sol.qr[t])*180/Math.PI;
+    return `<tr class="r" data-j="${j}"><td class="dim">${r+1}</td><td>(${M.m[j]}, ${M.n[j]})</td><td>${M.f[j].toFixed(1)}</td>`+
+      `<td><span class="ebar" style="width:${Math.max(2,sh*80)}px"></span> ${(sh*100).toFixed(1)}%</td>`+
+      `<td>${I?(sp*100).toFixed(sp<0.1?1:0)+'%':'<span class="dim">0 (no net volume)</span>'}</td><td class="dim">${ph.toFixed(0)}°</td></tr>`;}).join('');
+}
+
+/* ---------- patches UI ---------- */
+function clampPatch(p){
+  if(p.shape==='rect'){p.w=Math.min(Math.max(p.w,0.005),S.Lx);p.h=Math.min(Math.max(p.h,0.005),S.Ly);
+    p.cx=Math.min(Math.max(p.cx,p.w/2),S.Lx-p.w/2);p.cy=Math.min(Math.max(p.cy,p.h/2),S.Ly-p.h/2);}
+  else{p.d=Math.min(Math.max(p.d,0.005),S.Lx,S.Ly);p.cx=Math.min(Math.max(p.cx,p.d/2),S.Lx-p.d/2);p.cy=Math.min(Math.max(p.cy,p.d/2),S.Ly-p.d/2);}
+  return p;
+}
+function coverage(list,edge){
+  if(edge===undefined)edge=S.edge;const ew=edge&&edge.on?edge.w:0;
+  const nx=400,ny=Math.max(80,Math.round(400*S.Ly/S.Lx));let cnt=0;
+  for(let j=0;j<ny;j++){const y=(j+0.5)/ny*S.Ly;for(let i=0;i<nx;i++){const x=(i+0.5)/nx*S.Lx;
+    if(ew>0&&(x<ew||y<ew||x>S.Lx-ew||y>S.Ly-ew)){cnt++;continue;}
+    for(const p of list){if(p.shape==='rect'?(Math.abs(x-p.cx)<=p.w/2&&Math.abs(y-p.cy)<=p.h/2):((x-p.cx)**2+(y-p.cy)**2<=p.d*p.d/4)){cnt++;break;}}}}
+  return cnt/(nx*ny);
+}
+function tryPatches(next,msg){
+  next.forEach(clampPatch);const cov=coverage(next);
+  if(cov>MAX_COVER+1e-9){$('warnP').textContent=`${msg||'That change'} would cover ${(cov*100).toFixed(1)}% of the film. The limit is 40%, so it wasn't applied.`;renderPatchList();return false;}
+  $('warnP').textContent='';PATCHES=next;applyPatches();return true;
+}
+function applyPatches(){
+  renderPatchList();computePatchDiag();startFR();needField=true;needDom=true;
+}
+function renderPatchList(){
+  const cov=coverage(PATCHES);$('covTxt').textContent=`Coverage ${(cov*100).toFixed(1)}%`;$('covFill').style.width=Math.min(100,cov*100)+'%';
+  $('plist').innerHTML=PATCHES.map((p,i)=>{
+    const f=(k,lab,v)=>`<label class="f">${lab}<input type="number" data-i="${i}" data-k="${k}" value="${+(v*100).toFixed(2)}" step="0.5"></label>`;
+    return `<div class="prow"><span class="num">${i+1}</span>
+      <label class="f">Shape<select data-i="${i}" data-k="shape"><option value="rect"${p.shape==='rect'?' selected':''}>Rectangle</option><option value="circle"${p.shape==='circle'?' selected':''}>Circle</option></select></label>
+      ${f('cx','Centre x (cm)',p.cx)}${f('cy','Centre y (cm)',p.cy)}
+      ${p.shape==='rect'?f('w','Width (cm)',p.w)+f('h','Height (cm)',p.h):f('d','Diameter (cm)',p.d)+'<span></span>'}
+      <button class="x" data-del="${i}" title="Remove">✕</button></div>`;}).join('');
+}
+$('plist').addEventListener('change',e=>{
+  const el=e.target,i=+el.dataset.i,k=el.dataset.k;if(isNaN(i))return;
+  const next=PATCHES.map(p=>({...p}));const p=next[i];
+  if(k==='shape'){if(el.value!==p.shape){if(el.value==='circle')p.d=Math.min(p.w,p.h);else{p.w=p.d;p.h=p.d;}p.shape=el.value;}}
+  else{const v=parseFloat(el.value);if(!isFinite(v)||v<=0){renderPatchList();return;}p[k]=v/100;}
+  tryPatches(next,`Patch ${i+1}`);
+});
+$('plist').addEventListener('click',e=>{const b=e.target.closest('[data-del]');if(!b)return;const next=PATCHES.filter((_,i)=>i!==+b.dataset.del);tryPatches(next);});
+function freeSpot(p){ // try a few positions to avoid exceeding the cap
+  const cands=[[0.25,0.5],[0.75,0.5],[0.12,0.5],[0.88,0.5],[0.35,0.5],[0.65,0.5],[0.5,0.25],[0.5,0.75]];
+  let best=null,bc=9;for(const [u,v] of cands){const q=clampPatch({...p,cx:u*S.Lx,cy:v*S.Ly});const c=coverage([...PATCHES,q]);if(c<bc){bc=c;best=q;}}
+  return best;
+}
+$('addRect').addEventListener('click',()=>{const p=freeSpot({shape:'rect',w:Math.min(0.2,S.Lx*0.15),h:Math.min(0.1,S.Ly*0.3),d:0.1});tryPatches([...PATCHES,p],'Adding this patch');});
+$('addCirc').addEventListener('click',()=>{const p=freeSpot({shape:'circle',d:Math.min(0.1,S.Ly*0.3,S.Lx*0.3),w:0.1,h:0.1});tryPatches([...PATCHES,p],'Adding this patch');});
+$('addEdges').addEventListener('click',()=>{const s=Math.min(0.03,S.Ly*0.08);
+  tryPatches([{shape:'rect',cx:S.Lx/2,cy:s/2,w:S.Lx,h:s},{shape:'rect',cx:S.Lx/2,cy:S.Ly-s/2,w:S.Lx,h:s},
+    {shape:'rect',cx:s/2,cy:S.Ly/2,w:s,h:S.Ly-2*s},{shape:'rect',cx:S.Lx-s/2,cy:S.Ly/2,w:s,h:S.Ly-2*s}],'The edge-strip example');});
+$('clearP').addEventListener('click',()=>tryPatches([]));
+$('preset').addEventListener('change',e=>{const p=PRESETS[e.target.value];if(p){$('pm').value=p[0];$('peta').value=p[1];$('pR').value=p[2];$('pD').value=p[3];$('pDeta').value=p[4];}readMaterial();if(ELEMS.length)applyPatches();});
+['pm','peta','pR','pD','pDeta'].forEach(id=>$(id).addEventListener('change',()=>{$('preset').value='custom';readMaterial();if(ELEMS.length)applyPatches();}));
+
+/* ---------- canvas dragging ---------- */
+let dragIdx=-1,dragDrive=false,dragOff=[0,0],dragOrig=null;
+function evToM(e){const c=$('mem'),r=c.getBoundingClientRect();return [(e.clientX-r.left)/r.width*S.Lx,(1-(e.clientY-r.top)/r.height)*S.Ly];}
+function hitPatch(x,y){for(let i=PATCHES.length-1;i>=0;i--){const p=PATCHES[i];
+  if(p.shape==='rect'?(Math.abs(x-p.cx)<=p.w/2&&Math.abs(y-p.cy)<=p.h/2):((x-p.cx)**2+(y-p.cy)**2<=p.d*p.d/4))return i;}return -1;}
+(function(){const c=$('mem');
+  c.addEventListener('pointerdown',e=>{if(!M)return;const [x,y]=evToM(e);
+    const X0=S.dx*S.Lx,Y0=S.dy*S.Ly,dv=S.drive,rr=Math.max(dv.shape==='round'?dv.d/2:dv.shape==='rect'?Math.max(dv.w,dv.h)/2:0,0.03*S.Lx);
+    const r=c.getBoundingClientRect(),dxp=(x-X0)/S.Lx*r.width,dyp=(y-Y0)/S.Ly*r.height;
+    if(Math.hypot(dxp,dyp)<Math.max(18,rr/S.Lx*r.width)){dragDrive=true;c.setPointerCapture(e.pointerId);return;}
+    const i=hitPatch(x,y);if(i<0)return;dragIdx=i;dragOrig={...PATCHES[i]};dragOff=[x-PATCHES[i].cx,y-PATCHES[i].cy];c.setPointerCapture(e.pointerId);});
+  c.addEventListener('pointermove',e=>{const [x,y]=evToM(e);
+    if(dragDrive){$('dx').value=Math.round(Math.min(99,Math.max(1,x/S.Lx*100)));$('dy').value=Math.round(Math.min(99,Math.max(1,y/S.Ly*100)));readDrive();return;}
+    if(dragIdx<0)return;const p=PATCHES[dragIdx];p.cx=x-dragOff[0];p.cy=y-dragOff[1];clampPatch(p);});
+  const up=()=>{
+    if(dragDrive){dragDrive=false;onDriveChange();return;}
+    if(dragIdx<0)return;const i=dragIdx;dragIdx=-1;const next=PATCHES.map(p=>({...p}));PATCHES[i]=dragOrig;
+    if(next[i].cx===dragOrig.cx&&next[i].cy===dragOrig.cy)return;
+    tryPatches(next,`Moving patch ${i+1}`);};
+  c.addEventListener('pointerup',up);c.addEventListener('pointercancel',up);})();
+
+/* ---------- control flow ---------- */
+function setStatus(s){$('status').textContent=s;}
+function fullRebuild(){
+  setStatus('solving…');
+  setTimeout(()=>{
+    readParams();buildModes();computeCoupling();
+    PATCHES.forEach(clampPatch);
+    if(coverage(PATCHES)>MAX_COVER){PATCHES=[];$('warnP').textContent='The film got smaller and the patches exceeded 40% coverage, so they were cleared.';}
+    if(coverage(PATCHES)>MAX_COVER){S.edge.on=false;$('edgeOn').checked=false;$('warnP').textContent='The edge band alone exceeded 40% coverage, so it was switched off.';}
+    renderPatchList();computePatchDiag();
+    if(selMode>=M.N)selMode=-1;if(view==='mode'&&selMode<0)view='forced';
+    buildGrid();layoutMem();startFR();
+    needField=true;needTable=true;needFRdraw=true;needDom=true;syncSeg();
+  },20);
+}
+function onDriveChange(){readDrive();computeCoupling();startFR();needField=true;needTable=true;needDom=true;}
+function setFreq(f,fromSlider){
+  freq=Math.min(F_HI,Math.max(F_LO,f));
+  if(!fromSlider)$('fslider').value=Math.round(Math.log(freq/F_LO)/Math.log(F_HI/F_LO)*1000);
+  $('fbox').value=freq<100?freq.toFixed(2):Math.round(freq);
+  if(view==='mode'){view='forced';syncSeg();}
+  needField=true;needTable=true;needFRdraw=true;needDom=true;
+}
+function selectMode(j){selMode=j;view='mode';syncSeg();needField=true;needTable=true;needFRdraw=true;needDom=true;}
+function syncSeg(){
+  document.querySelectorAll('#viewSeg button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
+  document.querySelectorAll('#dispSeg button').forEach(b=>b.classList.toggle('on',b.dataset.d===disp));
+  drawCbar();
+}
+function loop(t){
+  const dt=lastT?Math.min(0.1,(t-lastT)/1000):0;lastT=t;
+  if(M&&G){
+    if(needField){computeField();needField=false;updateTitle();updateStats();needDom=true;}
+    if(needDom){updateDominant();needDom=false;}
+    if(needTable){updateTable();needTable=false;}
+    if(needFRdraw){drawFR();needFRdraw=false;}
+    if(playing&&disp==='snap')phase=(phase+dt*TWO_PI*0.6)%TWO_PI;
+    renderMem();
+  }
+  requestAnimationFrame(loop);
+}
+
+['Lx','Ly','h','rho','T','eta'].forEach(id=>$(id).addEventListener('change',fullRebuild));
+['dx','dy','dd','dw','dh','dshape'].forEach(id=>$(id).addEventListener('change',onDriveChange));
+$('air').addEventListener('change',fullRebuild);
+$('res').addEventListener('change',()=>{S.res=+$('res').value;buildGrid();layoutMem();needField=true;});
+$('fslider').addEventListener('input',e=>setFreq(F_LO*Math.pow(F_HI/F_LO,e.target.value/1000),true));
+$('fbox').addEventListener('change',e=>setFreq(parseFloat(e.target.value)||1000,false));
+$('prevMode').addEventListener('click',()=>{const f0=view==='mode'&&selMode>=0?M.f[selMode]:freq;const p=countBelow(M.f,M.drv,f0*0.9999)-1;if(p>=0)setFreq(M.f[M.drv[p]],false);});
+$('nextMode').addEventListener('click',()=>{const f0=view==='mode'&&selMode>=0?M.f[selMode]:freq;const p=countBelow(M.f,M.drv,f0*1.0001);if(p<M.drv.length)setFreq(M.f[M.drv[p]],false);});
+$('viewSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.v==='mode'){if(selMode<0){const p=Math.min(M.drv.length-1,countBelow(M.f,M.drv,freq));selMode=M.drv[Math.max(0,p)];}view='mode';}else view='forced';
+  syncSeg();needField=true;needTable=true;needFRdraw=true;needDom=true;});
+$('dispSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;disp=b.dataset.d;syncSeg();});
+$('play').addEventListener('click',()=>{playing=!playing;$('play').textContent=playing?'❚❚ Pause':'▶ Play';});
+$('onlyDriven').addEventListener('change',()=>{needTable=true;});
+$('tbody').addEventListener('click',e=>{const tr=e.target.closest('tr[data-j]');if(tr)selectMode(+tr.dataset.j);});
+$('domBody').addEventListener('click',e=>{const tr=e.target.closest('tr[data-j]');if(tr)selectMode(+tr.dataset.j);});
+(function(){const c=$('fr');let down=false;
+  const pick=e=>{if(!FR||!FR.geom)return;const r=c.getBoundingClientRect(),X=(e.clientX-r.left)*FR.geom.dpr;
+    const u=Math.min(1,Math.max(0,(X-FR.geom.padL)/FR.geom.pw));setFreq(F_LO*Math.pow(F_HI/F_LO,u),false);};
+  c.addEventListener('pointerdown',e=>{down=true;c.setPointerCapture(e.pointerId);pick(e);});
+  c.addEventListener('pointermove',e=>{if(down)pick(e);});
+  c.addEventListener('pointerup',()=>{down=false;});c.addEventListener('pointercancel',()=>{down=false;});})();
+let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(M){layoutMem();needFRdraw=true;sizePolar();drawDir();}},120);});
+
+$('fslider').value=Math.round(Math.log(freq/F_LO)/Math.log(F_HI/F_LO)*1000);
+renderChips();renderOctSel();sizePolar();fullRebuild();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
 
