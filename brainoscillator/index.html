@@ -20,7 +20,7 @@
   @media(max-width:900px){main{grid-template-columns:1fr}}
   .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
   .panel h2{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);font-weight:600}
-  .row{display:grid;grid-template-columns:1fr 54px;gap:2px 8px;align-items:center;margin:7px 0}
+  .row{display:grid;grid-template-columns:1fr 68px;gap:2px 8px;align-items:center;margin:7px 0}
   .row label{grid-column:1;font-size:12px}
   .row output{grid-column:2;text-align:right;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:var(--amber)}
   .row input[type=range]{grid-column:1 / 3;width:100%;accent-color:var(--amber);margin:0}
@@ -50,8 +50,8 @@
 </head>
 <body>
 <header>
-  <h1>BrainOscillator by Justus Verhagen</h1>
-  <span>2 hemispheres · 10×10 Kuramoto oscillators + 10×10 inhibitory units each</span>
+  <h1>BrainOscillator by Justus Verhagen<small style="font-weight:400;color:var(--dim);font-size:12px;margin-left:8px">by Justus Verhagen</small></h1>
+  <span id="hdrSub">2 hemispheres · 10×10 Kuramoto oscillators + 10×10 inhibitory units each (400 units total)</span>
   <div id="stats">t = 0.0 s</div>
 </header>
 
@@ -140,10 +140,12 @@
 'use strict';
 
 /* ---------- constants & state ---------- */
-const N = 10, NN = N * N, DT = 0.05, TWO_PI = 2 * Math.PI;
+let N = 10, NN = N * N;
+const DT = 0.05, TWO_PI = 2 * Math.PI;
 const HIST = 1200;                       // 60 s of history at dt=0.05
 
 const P = {                              // adjustable parameters
+  gridN: 10,
   f: 0.1, spread: 0.01,
   Kintra: 2.0, nbr: 1.5,
   Kinter: 1.0,
@@ -152,11 +154,12 @@ const P = {                              // adjustable parameters
 };
 let normII = false, running = true, colorMode = 'phase';
 
-const theta = [new Float64Array(NN), new Float64Array(NN)];
-const inh   = [new Float64Array(NN), new Float64Array(NN)];
-const zdraw = [new Float64Array(NN), new Float64Array(NN)];
-const newTh = [new Float64Array(NN), new Float64Array(NN)];
-const newIn = [new Float64Array(NN), new Float64Array(NN)];
+let theta, inh, zdraw, newTh, newIn;
+function allocState(){
+  const mk = () => [new Float64Array(NN), new Float64Array(NN)];
+  theta = mk(); inh = mk(); zdraw = mk(); newTh = mk(); newIn = mk();
+}
+allocState();
 let t = 0;
 
 const hist = { rL:new Float32Array(HIST), rR:new Float32Array(HIST), rC:new Float32Array(HIST),
@@ -176,24 +179,47 @@ function resetState(){
 }
 
 /* ---------- connectivity ---------- */
-let eeIdx = [], iiIdx = [], iiW = [];
+// Sparse (CSR) connectivity: neighbours of node i are idx[off[i] .. off[i+1])
+let eeOff, eeIdx, iiOff, iiIdx, iiW;
 function buildConnectivity(){
-  eeIdx = []; iiIdx = []; iiW = [];
+  const Rm = Math.ceil(Math.max(P.nbr, P.inhR));
+  const e2 = P.nbr*P.nbr, i2 = P.inhR*P.inhR, flat = P.inhSigma>=10;
+  const s2 = 2*P.inhSigma*P.inhSigma;
+  eeOff = new Int32Array(NN+1); iiOff = new Int32Array(NN+1);
+
+  // pass 1: count neighbours
   for(let i=0;i<NN;i++){
-    const xi=i%N, yi=(i/N)|0;
-    const e=[], ii=[], w=[]; let wsum=0;
-    for(let j=0;j<NN;j++){
-      if(i===j) continue;
-      const d = Math.hypot((j%N)-xi, ((j/N)|0)-yi);
-      if(d<=P.nbr) e.push(j);
-      if(d<=P.inhR){
-        const wt = P.inhSigma>=10 ? 1 : Math.exp(-d*d/(2*P.inhSigma*P.inhSigma));
-        ii.push(j); w.push(wt); wsum+=wt;
-      }
-    }
-    if(normII && wsum>0) for(let k=0;k<w.length;k++) w[k]/=wsum;
-    eeIdx.push(Int16Array.from(e)); iiIdx.push(Int16Array.from(ii)); iiW.push(Float64Array.from(w));
+    const xi=i%N, yi=(i/N)|0; let ce=0, ci=0;
+    for(let dy=-Rm;dy<=Rm;dy++){ const y=yi+dy; if(y<0||y>=N) continue;
+      for(let dx=-Rm;dx<=Rm;dx++){ const x=xi+dx; if(x<0||x>=N||(dx===0&&dy===0)) continue;
+        const d2=dx*dx+dy*dy;
+        if(d2<=e2) ce++;
+        if(d2<=i2) ci++;
+      } }
+    eeOff[i+1]=eeOff[i]+ce; iiOff[i+1]=iiOff[i]+ci;
   }
+  eeIdx = new Int32Array(eeOff[NN]);
+  iiIdx = new Int32Array(iiOff[NN]);
+  iiW   = new Float32Array(iiOff[NN]);
+
+  // pass 2: fill
+  for(let i=0;i<NN;i++){
+    const xi=i%N, yi=(i/N)|0; let pe=eeOff[i], pi=iiOff[i], wsum=0;
+    for(let dy=-Rm;dy<=Rm;dy++){ const y=yi+dy; if(y<0||y>=N) continue;
+      for(let dx=-Rm;dx<=Rm;dx++){ const x=xi+dx; if(x<0||x>=N||(dx===0&&dy===0)) continue;
+        const d2=dx*dx+dy*dy, j=y*N+x;
+        if(d2<=e2) eeIdx[pe++]=j;
+        if(d2<=i2){ const wt = flat ? 1 : Math.exp(-d2/s2); iiIdx[pi]=j; iiW[pi++]=wt; wsum+=wt; }
+      } }
+    if(normII && wsum>0) for(let k=iiOff[i];k<iiOff[i+1];k++) iiW[k]/=wsum;
+  }
+}
+
+function resizeGrid(n){
+  N = n; NN = n*n;
+  allocState(); resetState(); buildConnectivity();
+  document.getElementById('hdrSub').textContent =
+    `2 hemispheres · ${N}×${N} Kuramoto oscillators + ${N}×${N} inhibitory units each (${(4*NN).toLocaleString()} units total)`;
 }
 
 /* ---------- dynamics ---------- */
@@ -207,8 +233,8 @@ function step(){
   for(let h=0;h<2;h++){
     const I = inh[h], th = theta[h];
     for(let i=0;i<NN;i++){
-      let lat=0; const idx=iiIdx[i], w=iiW[i];
-      for(let k=0;k<idx.length;k++) lat += w[k]*I[idx[k]];
+      let lat=0;
+      for(let k=iiOff[i], ke=iiOff[i+1]; k<ke; k++) lat += iiW[k]*I[iiIdx[k]];
       const drive = P.wEI*Math.cos(th[i]) - P.wII*lat;
       newIn[h][i] = clamp(I[i] + DT*(-I[i]+sigmoid(drive))/P.tau, 0, 1);
     }
@@ -219,9 +245,9 @@ function step(){
   for(let h=0;h<2;h++){
     const th = theta[h], other = theta[1-h], I = inh[h];
     for(let i=0;i<NN;i++){
-      const idx = eeIdx[i]; let s=0;
-      for(let k=0;k<idx.length;k++) s += Math.sin(th[idx[k]]-th[i]);
-      const intra = idx.length ? (P.Kintra/idx.length)*s : 0;
+      const k0 = eeOff[i], k1 = eeOff[i+1]; let s=0;
+      for(let k=k0;k<k1;k++) s += Math.sin(th[eeIdx[k]]-th[i]);
+      const intra = k1>k0 ? (P.Kintra/(k1-k0))*s : 0;
       const inter = P.Kinter*Math.sin(other[i]-th[i]);
       const dth = omegaOf(h,i) - P.Kinh*(I[i]-0.5) + intra + inter;
       let v = (th[i] + DT*dth) % TWO_PI; if(v<0) v+=TWO_PI;
@@ -259,14 +285,28 @@ function excColor(th){
 const cv = id => document.getElementById(id);
 const gridCanvases = { EL:cv('gEL'), ER:cv('gER'), IL:cv('gIL'), IR:cv('gIR') };
 
+const offs = new Map();
 function drawGrid(canvas, getRGB){
   const ctx = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
   ctx.clearRect(0,0,W,H);
-  const pad=10, cell=(W-2*pad)/N, gap=3;
+  if(N>20){                                // large grids: raster via ImageData
+    let o = offs.get(canvas);
+    if(!o || o.c.width!==N){
+      const c=document.createElement('canvas'); c.width=c.height=N;
+      const cx=c.getContext('2d'); o={c,cx,img:cx.createImageData(N,N)}; offs.set(canvas,o);
+    }
+    const d=o.img.data;
+    for(let i=0;i<NN;i++){ const c=getRGB(i), p=i*4; d[p]=c[0]; d[p+1]=c[1]; d[p+2]=c[2]; d[p+3]=255; }
+    o.cx.putImageData(o.img,0,0);
+    ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(o.c,10,10,W-20,H-20);
+    return;
+  }
+  const pad=10, cell=(W-2*pad)/N, gap=N>12?2:3;
   for(let y=0;y<N;y++) for(let x=0;x<N;x++){
     const c = getRGB(y*N+x);
     ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
-    const px=pad+x*cell+gap/2, py=pad+y*cell+gap/2, s=cell-gap, r=5;
+    const px=pad+x*cell+gap/2, py=pad+y*cell+gap/2, s=cell-gap, r=Math.min(5,s/3);
     ctx.beginPath();
     ctx.moveTo(px+r,py); ctx.arcTo(px+s,py,px+s,py+s,r); ctx.arcTo(px+s,py+s,px,py+s,r);
     ctx.arcTo(px,py+s,px,py,r); ctx.arcTo(px,py,px+s,py,r); ctx.closePath(); ctx.fill();
@@ -332,7 +372,8 @@ const defs = {
               ['Kinh','I→E feedback K_inhib',0,10,0.1,v=>v.toFixed(1)],
               ['inhR','Inhibition radius (grid units)',1,9,0.5,v=>v.toFixed(1)],
               ['inhSigma','Inhibition σ (10 = flat)',0.5,10,0.5,v=>v>=10?'flat':v.toFixed(1)] ],
-  rowSpeed: [ ['speed','Sim speed (steps/frame)',1,20,1,v=>v.toFixed(0)] ]
+  rowSpeed: [ ['gridN','Grid size N×N (per layer)',10,100,1,v=>`${v}×${v}`],
+              ['speed','Sim speed (steps/frame)',1,20,1,v=>v.toFixed(0)] ]
 };
 const sliders = {};
 const rebuildKeys = new Set(['nbr','inhR','inhSigma']);
@@ -345,7 +386,8 @@ function makeSlider(container, [key,label,min,max,stp,fmt]){
   const inp=row.querySelector('input'), out=row.querySelector('output');
   const sync=()=>{ out.textContent=fmt(P[key]); inp.value=P[key]; };
   inp.addEventListener('input',()=>{ P[key]=parseFloat(inp.value); out.textContent=fmt(P[key]);
-    if(rebuildKeys.has(key)) buildConnectivity(); });
+    if(key==='gridN') resizeGrid(P.gridN);
+    else if(rebuildKeys.has(key)) buildConnectivity(); });
   sliders[key]=sync; sync();
 }
 for(const g in defs) defs[g].forEach(d=>makeSlider(cv(g),d));
@@ -371,7 +413,12 @@ function addKick(canvas,h){
     const r=canvas.getBoundingClientRect(), W=canvas.width;
     const px=(ev.clientX-r.left)/r.width*W, py=(ev.clientY-r.top)/r.height*W;
     const cell=(W-20)/N, x=Math.floor((px-10)/cell), y=Math.floor((py-10)/cell);
-    if(x>=0&&x<N&&y>=0&&y<N){ const i=y*N+x; theta[h][i]=(theta[h][i]+Math.PI)%TWO_PI; }
+    const rad = Math.floor(N/20);            // kick a small patch on big grids
+    for(let dy=-rad;dy<=rad;dy++) for(let dx=-rad;dx<=rad;dx++){
+      const xx=x+dx, yy=y+dy;
+      if(dx*dx+dy*dy>rad*rad+0.5||xx<0||xx>=N||yy<0||yy>=N) continue;
+      const i=yy*N+xx; theta[h][i]=(theta[h][i]+Math.PI)%TWO_PI;
+    }
   });
 }
 addKick(gridCanvases.EL,0); addKick(gridCanvases.ER,1);
