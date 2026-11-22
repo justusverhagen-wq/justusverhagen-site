@@ -1,1 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BrainOscillator by Justus Verhagen</title>
+<style>
+  :root{
+    --bg:#0c0f14; --panel:#131820; --line:#232b38; --txt:#d8dee9; --dim:#7d8799;
+    --exc:#5aa9e6; --inh:#ef6f5e; --inter:#3ecfae; --amber:#f2b84b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font:13px/1.4 "Avenir Next","Segoe UI",system-ui,sans-serif;}
+  header{display:flex;align-items:baseline;gap:16px;padding:14px 20px 10px;border-bottom:1px solid var(--line)}
+  header h1{margin:0;font-size:17px;font-weight:600;letter-spacing:.02em}
+  header span{color:var(--dim);font-size:12px}
+  #stats{margin-left:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:var(--amber)}
+  main{display:grid;grid-template-columns:300px 1fr;gap:16px;padding:16px 20px}
+  @media(max-width:900px){main{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .panel h2{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);font-weight:600}
+  .row{display:grid;grid-template-columns:1fr 54px;gap:2px 8px;align-items:center;margin:7px 0}
+  .row label{grid-column:1;font-size:12px}
+  .row output{grid-column:2;text-align:right;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:var(--amber)}
+  .row input[type=range]{grid-column:1 / 3;width:100%;accent-color:var(--amber);margin:0}
+  .grp-exc h2{color:var(--exc)} .grp-inh h2{color:var(--inh)} .grp-inter h2{color:var(--inter)}
+  .btns{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+  button,select{background:#1b2230;color:var(--txt);border:1px solid #2c3647;border-radius:6px;
+    padding:6px 10px;font:inherit;cursor:pointer}
+  button:hover,select:hover{border-color:var(--amber)}
+  button.primary{background:var(--amber);color:#1a1405;border-color:var(--amber);font-weight:600}
+  .chk{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:12px}
+  #controls{display:flex;flex-direction:column;gap:12px}
+  #viz{display:grid;grid-template-columns:1fr 1.15fr 1fr;grid-template-rows:auto auto;gap:12px;align-content:start}
+  @media(max-width:1100px){#viz{grid-template-columns:1fr 1fr}}
+  .cell{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px}
+  .cell h3{margin:0 0 6px;font-size:12px;font-weight:600;letter-spacing:.04em}
+  .cell.e h3{color:var(--exc)} .cell.i h3{color:var(--inh)}
+  canvas{display:block;width:100%;height:auto;border-radius:6px;background:#0a0d12}
+  canvas.grid{aspect-ratio:1/1;cursor:crosshair}
+  .legend{display:flex;gap:12px;font-size:11px;margin-top:6px;color:var(--dim)}
+  .legend i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:4px;border-radius:2px}
+  .mid{display:flex;flex-direction:column;gap:12px}
+  details{grid-column:1/-1}
+  details summary{cursor:pointer;color:var(--dim);font-size:12px;padding:4px 0}
+  svg text{font-family:inherit}
+  .hint{color:var(--dim);font-size:11px;margin-top:6px}
+</style>
+</head>
+<body>
+<header>
+  <h1>BrainOscillator by Justus Verhagen</h1>
+  <span>2 hemispheres · 10×10 Kuramoto oscillators + 10×10 inhibitory units each</span>
+  <div id="stats">t = 0.0 s</div>
+</header>
 
+<main>
+  <div id="controls">
+    <div class="panel">
+      <div class="btns">
+        <button id="btnPlay" class="primary">Pause</button>
+        <button id="btnReset">Reset phases</button>
+        <select id="preset">
+          <option value="">Presets…</option>
+          <option value="rest">Resting-state (BOLD-like)</option>
+          <option value="strong">Strong inhibition</option>
+          <option value="decoupled">Decoupled</option>
+          <option value="sync">Hypersynchrony</option>
+        </select>
+      </div>
+      <div class="row"><label>Display mode (excitatory)</label><span></span>
+        <select id="colorMode" style="grid-column:1/3">
+          <option value="phase">Phase θ (cyclic hue)</option>
+          <option value="cos">cos θ (HSV map)</option>
+        </select>
+      </div>
+      <div id="rowSpeed"></div>
+    </div>
+
+    <div class="panel grp-exc"><h2>Oscillators (excitatory)</h2><div id="grpExc"></div></div>
+    <div class="panel grp-inter"><h2>Interhemispheric</h2><div id="grpInter"></div></div>
+    <div class="panel grp-inh"><h2>Inhibitory layer</h2><div id="grpInh"></div>
+      <label class="chk"><input type="checkbox" id="normII"> Normalize I–I by total weight</label>
+    </div>
+  </div>
+
+  <div id="viz">
+    <div class="cell e"><h3>Left — Excitatory</h3><canvas class="grid" id="gEL" width="400" height="400"></canvas></div>
+    <div class="cell mid-top" style="grid-row:1/3;grid-column:2">
+      <h3 style="color:var(--amber)">Excitatory synchrony</h3>
+      <canvas id="plotR" width="800" height="360"></canvas>
+      <div class="legend">
+        <span><i style="background:#5ad2f4"></i>r left</span>
+        <span><i style="background:#e56bd0"></i>r right</span>
+        <span><i style="background:#f2e35a"></i>r inter-hemispheric</span>
+      </div>
+      <h3 style="color:var(--amber);margin-top:14px">Mean inhibitory activity</h3>
+      <canvas id="plotI" width="800" height="360"></canvas>
+      <div class="legend">
+        <span><i style="background:#6be58b"></i>⟨I⟩ left</span>
+        <span><i style="background:#ff9a3c"></i>⟨I⟩ right</span>
+      </div>
+      <div class="hint">Click any excitatory cell to kick its phase by π and watch the perturbation spread.</div>
+    </div>
+    <div class="cell e"><h3>Right — Excitatory</h3><canvas class="grid" id="gER" width="400" height="400"></canvas></div>
+    <div class="cell i"><h3>Left — Inhibitory</h3><canvas class="grid" id="gIL" width="400" height="400"></canvas></div>
+    <div class="cell i"><h3>Right — Inhibitory</h3><canvas class="grid" id="gIR" width="400" height="400"></canvas></div>
+
+    <details>
+      <summary>Connectivity schematic</summary>
+      <div class="panel">
+        <svg viewBox="0 0 900 330" width="100%" role="img" aria-label="Connectivity schematic">
+          <defs>
+            <marker id="aE" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#f2b84b"/></marker>
+            <marker id="aF" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#b57bee"/></marker>
+            <marker id="aC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#3ecfae"/></marker>
+          </defs>
+          <rect x="10" y="10" width="360" height="310" rx="12" fill="#101722" stroke="#232b38"/>
+          <rect x="530" y="10" width="360" height="310" rx="12" fill="#101722" stroke="#232b38"/>
+          <text x="190" y="32" fill="#7d8799" font-size="12" text-anchor="middle">LEFT HEMISPHERE</text>
+          <text x="710" y="32" fill="#7d8799" font-size="12" text-anchor="middle">RIGHT HEMISPHERE</text>
+          <g id="schem"></g>
+          <text x="450" y="100" fill="#3ecfae" font-size="12" text-anchor="middle">K_inter (mirror E↔E)</text>
+        </svg>
+        <div class="legend" style="flex-wrap:wrap">
+          <span><i style="background:#5aa9e6"></i>E–E local (K_intra)</span>
+          <span><i style="background:#f2b84b"></i>E→I drive (w_EI)</span>
+          <span><i style="background:#ef6f5e"></i>I–I long-range inhibition (w_II, σ, radius)</span>
+          <span><i style="background:#b57bee"></i>I→E feedback (K_inhib)</span>
+          <span><i style="background:#3ecfae"></i>Left↔Right mirror (K_inter)</span>
+        </div>
+      </div>
+    </details>
+  </div>
+</main>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------- constants & state ---------- */
+const N = 10, NN = N * N, DT = 0.05, TWO_PI = 2 * Math.PI;
+const HIST = 1200;                       // 60 s of history at dt=0.05
+
+const P = {                              // adjustable parameters
+  f: 0.1, spread: 0.01,
+  Kintra: 2.0, nbr: 1.5,
+  Kinter: 1.0,
+  tau: 0.5, wEI: 3.0, wII: 0.5, Kinh: 1.5, inhR: 4.0, inhSigma: 2.0,
+  speed: 2
+};
+let normII = false, running = true, colorMode = 'phase';
+
+const theta = [new Float64Array(NN), new Float64Array(NN)];
+const inh   = [new Float64Array(NN), new Float64Array(NN)];
+const zdraw = [new Float64Array(NN), new Float64Array(NN)];
+const newTh = [new Float64Array(NN), new Float64Array(NN)];
+const newIn = [new Float64Array(NN), new Float64Array(NN)];
+let t = 0;
+
+const hist = { rL:new Float32Array(HIST), rR:new Float32Array(HIST), rC:new Float32Array(HIST),
+               iL:new Float32Array(HIST), iR:new Float32Array(HIST), n:0, head:0, tHist:new Float32Array(HIST) };
+
+/* ---------- random helpers ---------- */
+function randn(){ let u=0,v=0; while(!u)u=Math.random(); while(!v)v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(TWO_PI*v); }
+
+function resetState(){
+  for(let h=0;h<2;h++) for(let i=0;i<NN;i++){
+    theta[h][i] = TWO_PI*Math.random();      // randomized initial phases
+    inh[h][i]   = 0.1*Math.random();
+    zdraw[h][i] = randn();
+  }
+  t = 0; hist.n = 0; hist.head = 0;
+}
+
+/* ---------- connectivity ---------- */
+let eeIdx = [], iiIdx = [], iiW = [];
+function buildConnectivity(){
+  eeIdx = []; iiIdx = []; iiW = [];
+  for(let i=0;i<NN;i++){
+    const xi=i%N, yi=(i/N)|0;
+    const e=[], ii=[], w=[]; let wsum=0;
+    for(let j=0;j<NN;j++){
+      if(i===j) continue;
+      const d = Math.hypot((j%N)-xi, ((j/N)|0)-yi);
+      if(d<=P.nbr) e.push(j);
+      if(d<=P.inhR){
+        const wt = P.inhSigma>=10 ? 1 : Math.exp(-d*d/(2*P.inhSigma*P.inhSigma));
+        ii.push(j); w.push(wt); wsum+=wt;
+      }
+    }
+    if(normII && wsum>0) for(let k=0;k<w.length;k++) w[k]/=wsum;
+    eeIdx.push(Int16Array.from(e)); iiIdx.push(Int16Array.from(ii)); iiW.push(Float64Array.from(w));
+  }
+}
+
+/* ---------- dynamics ---------- */
+const sigmoid = x => 1/(1+Math.exp(-x));
+const clamp = (x,a,b) => x<a?a:(x>b?b:x);
+
+function step(){
+  const omegaOf = (h,i) => TWO_PI*clamp(P.f + P.spread*zdraw[h][i], 0.01, 1.0);
+
+  // inhibitory layer: tau dI/dt = -I + sigmoid(wEI*cos(theta) - wII*sum W_ij I_j)
+  for(let h=0;h<2;h++){
+    const I = inh[h], th = theta[h];
+    for(let i=0;i<NN;i++){
+      let lat=0; const idx=iiIdx[i], w=iiW[i];
+      for(let k=0;k<idx.length;k++) lat += w[k]*I[idx[k]];
+      const drive = P.wEI*Math.cos(th[i]) - P.wII*lat;
+      newIn[h][i] = clamp(I[i] + DT*(-I[i]+sigmoid(drive))/P.tau, 0, 1);
+    }
+  }
+  for(let h=0;h<2;h++) inh[h].set(newIn[h]);
+
+  // Kuramoto layer (both hemispheres use old phases)
+  for(let h=0;h<2;h++){
+    const th = theta[h], other = theta[1-h], I = inh[h];
+    for(let i=0;i<NN;i++){
+      const idx = eeIdx[i]; let s=0;
+      for(let k=0;k<idx.length;k++) s += Math.sin(th[idx[k]]-th[i]);
+      const intra = idx.length ? (P.Kintra/idx.length)*s : 0;
+      const inter = P.Kinter*Math.sin(other[i]-th[i]);
+      const dth = omegaOf(h,i) - P.Kinh*(I[i]-0.5) + intra + inter;
+      let v = (th[i] + DT*dth) % TWO_PI; if(v<0) v+=TWO_PI;
+      newTh[h][i] = v;
+    }
+  }
+  for(let h=0;h<2;h++) theta[h].set(newTh[h]);
+  t += DT;
+
+  // order parameters & history
+  const rr = (arr)=>{ let c=0,s=0; for(let i=0;i<NN;i++){c+=Math.cos(arr[i]);s+=Math.sin(arr[i]);} return Math.hypot(c,s)/NN; };
+  let cc=0,ss=0, mL=0, mR=0;
+  for(let i=0;i<NN;i++){ const d=theta[0][i]-theta[1][i]; cc+=Math.cos(d); ss+=Math.sin(d); mL+=inh[0][i]; mR+=inh[1][i]; }
+  const k = hist.head;
+  hist.rL[k]=rr(theta[0]); hist.rR[k]=rr(theta[1]); hist.rC[k]=Math.hypot(cc,ss)/NN;
+  hist.iL[k]=mL/NN; hist.iR[k]=mR/NN; hist.tHist[k]=t;
+  hist.head=(k+1)%HIST; hist.n=Math.min(hist.n+1,HIST);
+}
+
+/* ---------- colour maps ---------- */
+function hsv(h,s,v){
+  h=((h%1)+1)%1; const i=Math.floor(h*6), f=h*6-i, p=v*(1-s), q=v*(1-f*s), u=v*(1-(1-f)*s);
+  const m=[[v,u,p],[q,v,p],[p,v,u],[p,q,v],[u,p,v],[v,p,q]][i%6];
+  return [m[0]*255|0,m[1]*255|0,m[2]*255|0];
+}
+function hot(v){
+  v=clamp(v,0,1);
+  return [clamp(3*v,0,1)*255|0, clamp(3*v-1,0,1)*255|0, clamp(3*v-2,0,1)*255|0];
+}
+function excColor(th){
+  return colorMode==='phase' ? hsv(th/TWO_PI,0.85,0.95) : hsv((Math.cos(th)+1)/2*0.85,0.9,0.95);
+}
+
+/* ---------- rendering ---------- */
+const cv = id => document.getElementById(id);
+const gridCanvases = { EL:cv('gEL'), ER:cv('gER'), IL:cv('gIL'), IR:cv('gIR') };
+
+function drawGrid(canvas, getRGB){
+  const ctx = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+  const pad=10, cell=(W-2*pad)/N, gap=3;
+  for(let y=0;y<N;y++) for(let x=0;x<N;x++){
+    const c = getRGB(y*N+x);
+    ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+    const px=pad+x*cell+gap/2, py=pad+y*cell+gap/2, s=cell-gap, r=5;
+    ctx.beginPath();
+    ctx.moveTo(px+r,py); ctx.arcTo(px+s,py,px+s,py+s,r); ctx.arcTo(px+s,py+s,px,py+s,r);
+    ctx.arcTo(px,py+s,px,py,r); ctx.arcTo(px,py,px+s,py,r); ctx.closePath(); ctx.fill();
+  }
+}
+
+function drawPlot(canvas, series, yMax){
+  const ctx=canvas.getContext('2d'), W=canvas.width, H=canvas.height;
+  const L=44,R=12,T=10,B=28, pw=W-L-R, ph=H-T-B;
+  ctx.clearRect(0,0,W,H);
+  ctx.font='16px ui-monospace,Menlo,monospace'; ctx.fillStyle='#7d8799'; ctx.strokeStyle='#232b38'; ctx.lineWidth=1;
+  for(let g=0;g<=4;g++){
+    const y=T+ph*(1-g/4); ctx.beginPath(); ctx.moveTo(L,y); ctx.lineTo(W-R,y); ctx.stroke();
+    ctx.textAlign='right'; ctx.fillText((yMax*g/4).toFixed(2), L-6, y+5);
+  }
+  const win = HIST*DT, tEnd = Math.max(t, win), tStart = tEnd-win;
+  ctx.textAlign='center';
+  for(let g=0;g<=4;g++){
+    const x=L+pw*g/4; ctx.fillText((tStart+win*g/4).toFixed(0)+'s', x, H-8);
+  }
+  if(hist.n<2) return;
+  for(const s of series){
+    ctx.strokeStyle=s.color; ctx.lineWidth=2.2; ctx.beginPath();
+    const start=(hist.head-hist.n+HIST)%HIST;
+    for(let k=0;k<hist.n;k++){
+      const idx=(start+k)%HIST;
+      const x=L+pw*((hist.tHist[idx]-tStart)/win);
+      const y=T+ph*(1-clamp(hist[s.key][idx]/yMax,0,1));
+      k?ctx.lineTo(x,y):ctx.moveTo(x,y);
+    }
+    ctx.stroke();
+  }
+}
+
+function render(){
+  drawGrid(gridCanvases.EL, i=>excColor(theta[0][i]));
+  drawGrid(gridCanvases.ER, i=>excColor(theta[1][i]));
+  drawGrid(gridCanvases.IL, i=>hot(inh[0][i]));
+  drawGrid(gridCanvases.IR, i=>hot(inh[1][i]));
+  drawPlot(cv('plotR'), [{key:'rL',color:'#5ad2f4'},{key:'rR',color:'#e56bd0'},{key:'rC',color:'#f2e35a'}], 1);
+  drawPlot(cv('plotI'), [{key:'iL',color:'#6be58b'},{key:'iR',color:'#ff9a3c'}], 1);
+  const k=(hist.head-1+HIST)%HIST;
+  if(hist.n) cv('stats').textContent =
+    `t = ${t.toFixed(1)} s   rL ${hist.rL[k].toFixed(2)}  rR ${hist.rR[k].toFixed(2)}  r↔ ${hist.rC[k].toFixed(2)}   ⟨I⟩ ${hist.iL[k].toFixed(2)} / ${hist.iR[k].toFixed(2)}`;
+}
+
+function loop(){
+  if(running){ for(let s=0;s<P.speed;s++) step(); }
+  render();
+  requestAnimationFrame(loop);
+}
+
+/* ---------- controls ---------- */
+const defs = {
+  grpExc:   [ ['f','Frequency (Hz)',0.01,1,0.01,v=>v.toFixed(2)],
+              ['spread','Frequency spread (Hz)',0,0.2,0.005,v=>v.toFixed(3)],
+              ['Kintra','Within-hemisphere coupling K_intra',0,10,0.1,v=>v.toFixed(1)],
+              ['nbr','E–E reach (grid units)',1,3,0.5,v=>v.toFixed(1)] ],
+  grpInter: [ ['Kinter','Mirror coupling K_inter',0,10,0.1,v=>v.toFixed(1)] ],
+  grpInh:   [ ['tau','Time constant τ (s)',0.05,5,0.05,v=>v.toFixed(2)],
+              ['wEI','E→I drive w_EI',0,10,0.1,v=>v.toFixed(1)],
+              ['wII','I–I lateral inhibition w_II',0,5,0.05,v=>v.toFixed(2)],
+              ['Kinh','I→E feedback K_inhib',0,10,0.1,v=>v.toFixed(1)],
+              ['inhR','Inhibition radius (grid units)',1,9,0.5,v=>v.toFixed(1)],
+              ['inhSigma','Inhibition σ (10 = flat)',0.5,10,0.5,v=>v>=10?'flat':v.toFixed(1)] ],
+  rowSpeed: [ ['speed','Sim speed (steps/frame)',1,20,1,v=>v.toFixed(0)] ]
+};
+const sliders = {};
+const rebuildKeys = new Set(['nbr','inhR','inhSigma']);
+
+function makeSlider(container, [key,label,min,max,stp,fmt]){
+  const row=document.createElement('div'); row.className='row';
+  row.innerHTML=`<label for="s_${key}">${label}</label><output id="o_${key}"></output>
+                 <input type="range" id="s_${key}" min="${min}" max="${max}" step="${stp}">`;
+  container.appendChild(row);
+  const inp=row.querySelector('input'), out=row.querySelector('output');
+  const sync=()=>{ out.textContent=fmt(P[key]); inp.value=P[key]; };
+  inp.addEventListener('input',()=>{ P[key]=parseFloat(inp.value); out.textContent=fmt(P[key]);
+    if(rebuildKeys.has(key)) buildConnectivity(); });
+  sliders[key]=sync; sync();
+}
+for(const g in defs) defs[g].forEach(d=>makeSlider(cv(g),d));
+
+function setParams(obj){ Object.assign(P,obj); for(const k in sliders) sliders[k](); buildConnectivity(); }
+
+cv('normII').addEventListener('change',e=>{ normII=e.target.checked; buildConnectivity(); });
+cv('colorMode').addEventListener('change',e=>colorMode=e.target.value);
+cv('btnPlay').addEventListener('click',e=>{ running=!running; e.target.textContent=running?'Pause':'Resume'; });
+cv('btnReset').addEventListener('click',resetState);
+
+const presets = {
+  rest:      {f:0.05,spread:0.005,Kintra:2,Kinter:1,nbr:1.5,tau:0.5,wEI:3,wII:0.5,Kinh:1.5,inhR:4,inhSigma:2},
+  strong:    {f:0.1,spread:0.01,Kintra:2,Kinter:1,nbr:1.5,tau:0.5,wEI:6,wII:2,Kinh:5,inhR:6,inhSigma:3},
+  decoupled: {f:0.1,spread:0.03,Kintra:0,Kinter:0,nbr:1.5,tau:0.5,wEI:3,wII:0.5,Kinh:0,inhR:4,inhSigma:2},
+  sync:      {f:0.1,spread:0.005,Kintra:8,Kinter:6,nbr:2,tau:0.5,wEI:1,wII:0.1,Kinh:0.5,inhR:3,inhSigma:2}
+};
+cv('preset').addEventListener('change',e=>{ const p=presets[e.target.value]; if(p) setParams(p); e.target.value=''; });
+
+// click an excitatory cell to kick its phase by π
+function addKick(canvas,h){
+  canvas.addEventListener('click',ev=>{
+    const r=canvas.getBoundingClientRect(), W=canvas.width;
+    const px=(ev.clientX-r.left)/r.width*W, py=(ev.clientY-r.top)/r.height*W;
+    const cell=(W-20)/N, x=Math.floor((px-10)/cell), y=Math.floor((py-10)/cell);
+    if(x>=0&&x<N&&y>=0&&y<N){ const i=y*N+x; theta[h][i]=(theta[h][i]+Math.PI)%TWO_PI; }
+  });
+}
+addKick(gridCanvases.EL,0); addKick(gridCanvases.ER,1);
+
+/* ---------- connectivity schematic (3x3 representative grid) ---------- */
+(function drawSchematic(){
+  const g=cv('schem'); let s='';
+  const mk=(ox)=>{
+    const xs=[ox,ox+70,ox+140], eY=[70,115,160], iY=[215,255,295];
+    let o='';
+    // E–E local
+    for(const x of xs) for(let a=0;a<3;a++){ if(a<2) o+=`<line x1="${x}" y1="${eY[a]}" x2="${x}" y2="${eY[a+1]}" stroke="#5aa9e6" stroke-width="1.5" opacity=".6"/>`; }
+    for(const y of eY) for(let a=0;a<2;a++) o+=`<line x1="${xs[a]}" y1="${y}" x2="${xs[a+1]}" y2="${y}" stroke="#5aa9e6" stroke-width="1.5" opacity=".6"/>`;
+    // I–I long-range (dashed, incl. diagonals)
+    for(let a=0;a<3;a++) for(let b=0;b<3;b++) for(let c=0;c<3;c++) for(let d=0;d<3;d++){
+      if(a*3+b<c*3+d) o+=`<line x1="${xs[a]}" y1="${iY[b]}" x2="${xs[c]}" y2="${iY[d]}" stroke="#ef6f5e" stroke-width="1" stroke-dasharray="4 3" opacity="${(Math.hypot(a-c,b-d)>1.5)?.25:.55}"/>`;
+    }
+    // E->I drive (only bottom row of E -> top row of I, representative)
+    for(const x of xs) o+=`<line x1="${x}" y1="${eY[2]+14}" x2="${x}" y2="${iY[0]-14}" stroke="#f2b84b" stroke-width="2" marker-end="url(#aE)"/>`;
+    // nodes
+    for(const x of xs) for(const y of eY) o+=`<circle cx="${x}" cy="${y}" r="13" fill="#1d3a55" stroke="#5aa9e6" stroke-width="2"/><text x="${x}" y="${y+4}" fill="#5aa9e6" font-size="12" text-anchor="middle">θ</text>`;
+    for(const x of xs) for(const y of iY) o+=`<rect x="${x-12}" y="${y-12}" width="24" height="24" rx="5" fill="#4a2420" stroke="#ef6f5e" stroke-width="2"/><text x="${x}" y="${y+4}" fill="#ef6f5e" font-size="12" text-anchor="middle">I</text>`;
+    return o;
+  };
+  s+=mk(60); s+=mk(580);
+  // I->E feedback arcs
+  s+=`<path d="M48 255 C16 215 16 110 48 72" fill="none" stroke="#b57bee" stroke-width="2.2" marker-end="url(#aF)"/>`;
+  s+=`<path d="M732 255 C764 215 764 110 732 72" fill="none" stroke="#b57bee" stroke-width="2.2" marker-end="url(#aF)"/>`;
+  s+=`<text x="24" y="165" fill="#b57bee" font-size="11" text-anchor="middle" transform="rotate(-90 24 165)">I→E (K_inhib)</text>`;
+  s+=`<text x="758" y="165" fill="#b57bee" font-size="11" text-anchor="middle" transform="rotate(90 758 165)">I→E (K_inhib)</text>`;
+  // mirror coupling (left column 3 <-> right column 1 is the mirror pair)
+  for(const y of [70,115,160]) s+=`<line x1="215" y1="${y}" x2="565" y2="${y}" stroke="#3ecfae" stroke-width="2" marker-start="url(#aC)" marker-end="url(#aC)"/>`;
+  s+=`<text x="190" y="313" fill="#7d8799" font-size="11" text-anchor="middle"></text>`;
+  g.innerHTML=s;
+})();
+
+/* ---------- boot ---------- */
+resetState();
+buildConnectivity();
+loop();
+})();
+</script>
+</body>
+</html>
