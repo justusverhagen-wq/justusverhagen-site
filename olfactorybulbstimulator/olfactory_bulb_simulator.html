@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Olfactory Bulb Glomerular Input–Output Simulator</title>
+<style>
+:root{--bg:#0d1015;--panel:#151a21;--line:#2a313c;--text:#d8dee7;--mute:#8b96a5;--in:#ffb02e;--out:#4fc3f7;--sup:#5b8cff;--acc:#e8577a;--odB:#5fd38d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:13px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{padding:14px 18px 6px}
+h1{font-size:18px;margin:0 0 4px;font-weight:600}
+h2{font-size:14px;margin:0 0 8px;font-weight:600;letter-spacing:.02em}
+h3{font-size:12px;margin:10px 0 4px;color:var(--mute);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+h2 .n{display:inline-block;width:20px;height:20px;border-radius:50%;background:#2a313c;text-align:center;line-height:20px;font-size:11px;margin-right:6px}
+.sub{color:var(--mute);font-size:12px;max-width:1150px}
+main{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px;padding:10px 14px 30px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+section.wide{grid-column:1/-1}
+.ctl{display:grid;grid-template-columns:1fr 110px 52px;align-items:center;gap:6px;margin:3px 0}
+.ctl label{color:var(--mute);font-size:12px}
+.ctl output{font-variant-numeric:tabular-nums;text-align:right;font-size:12px}
+input[type=range]{width:100%;accent-color:#7aa2ff}
+select,button{background:#1e252f;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font:inherit;font-size:12px}
+button{cursor:pointer}button:hover{border-color:#4a5566}
+button.primary{background:#2b4a7a;border-color:#3b62a0}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}
+.chk{display:flex;gap:4px;align-items:center;color:var(--mute);font-size:12px}
+.sel{display:grid;grid-template-columns:1fr 172px;align-items:center;gap:6px;margin:4px 0}
+.sel label{color:var(--mute);font-size:12px}
+.maps{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+.mapbox canvas{width:100%;aspect-ratio:2700/1900;display:block;border-radius:6px;background:#07090c;cursor:crosshair}
+.maptitle{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.maptitle b{font-size:13px}.maptitle span{color:var(--mute);font-size:11px}
+canvas.plot{width:100%;display:block}
+#traces{height:350px}#stimc{height:110px}
+.plots{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
+.plots canvas{height:210px;background:#11151b;border-radius:6px}
+.rasters canvas{height:300px;background:#11151b;border-radius:6px}
+.cap{color:var(--mute);font-size:11px;margin:3px 2px 0}
+.info{font-size:12px;color:var(--mute);min-height:18px}
+.info b{color:var(--text)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--mute)}
+.sw{display:inline-block;width:12px;height:3px;vertical-align:middle;margin-right:4px}
+.notes{font-size:12px;color:#c3cbd6}
+.notes li{margin:3px 0}
+.status{font-size:11px;color:var(--mute);margin-left:auto}
+svg text{font:10px system-ui;fill:#c3cbd6}
+details summary{cursor:pointer;color:var(--mute);font-size:12px;margin:6px 0}
+</style>
+</head>
+<body>
+<header>
+<h1>Olfactory bulb glomerular input → MTC output simulator</h1>
+<div class="sub">Rate model of the dorsal mouse OB as seen by wide-field fluorescence imaging. Input is the OSN axon-terminal signal (e.g. OMP-GCaMP); output is the mitral/tufted signal in the same glomeruli, with sister cells pooled. The model covers orthonasal stimulation only. Each glomerulus is a unitary relay with a Storace-lab input–output gain. Added to that: sniff-rate-dependent presynaptic adaptation (Verhagen et al. 2007), response dynamics that differ by glomerulus for both ORN input (Spors et al. 2006) and MTC output, and selective, non-random interglomerular inhibition (Economo et al. 2016). The model also has odorant mixtures and a constant background odorant. Odor maps are <i>synthetic</i> and chemotopically clustered.</div>
+</header>
+<main>
+
+<section>
+<h2><span class="n">1</span>Stimulation paradigm</h2>
+<div class="sel"><label>Odorant A</label><select id="odorA"></select></div>
+<div class="sel"><label>Odorant B</label><select id="odorB"></select></div>
+<div class="sel"><label>Presentation pattern</label><select id="pattern">
+<option value="A">A only</option><option value="B">B only</option><option value="alt">A, B alternating</option><option value="mix">A+B binary mixture</option><option value="seq3" selected>A → B → A+B</option></select></div>
+<div id="ctl-stim"></div>
+<h3>Background odorant (constant, sniff-sampled)</h3>
+<div class="sel"><label>Background</label><select id="odorBG"></select></div>
+<div id="ctl-bg"></div>
+<h3>Breathing / sniffing</h3>
+<div id="ctl-sniff"></div>
+<div class="row"><label class="chk"><input type="checkbox" id="boutOn">Sniff bout at each presentation (e.g. 2 → 8 Hz switch, as in Verhagen et al. 2007)</label></div>
+<div id="ctl-bout"></div>
+<span class="status" id="simstat"></span>
+<canvas id="stimc" class="plot"></canvas>
+<div class="cap">Valves A (red) and B (green), with the grey band showing background level. The middle trace is inhalation flow; flow amplitude grows with sniff rate. The bottom trace shows instantaneous sniff rate.</div>
+</section>
+
+<section>
+<h2><span class="n">⚙</span>Imaging &amp; display</h2>
+<div class="sel"><label>Input indicator</label><select id="indIn">
+<option value="GCaMP3">OMP-GCaMP3</option><option value="GCaMP6s">OMP-tTA × tetO-GCaMP6s</option><option value="spH">OMP-synapto-pHluorin</option><option value="CaDye">Ca-dye in ORN terminals (Wachowiak/Spors)</option></select></div>
+<div class="sel"><label>Output indicator</label><select id="indOut">
+<option value="GCaMP6f">Tbx21/Pcdh21-Cre × GCaMP6f</option><option value="GCaMP6s">GCaMP6s</option><option value="GCaMP8m">GCaMP8m</option><option value="jRCaMP1b">jRCaMP1b</option></select></div>
+<div id="ctl-img"></div>
+<div class="row"><label class="chk">Map seed</label><input id="seed" type="number" value="7" min="1" max="999" style="width:64px;background:#1e252f;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:3px 6px">
+<button id="reseed">New map</button>
+<label class="chk"><input type="checkbox" id="outlines" checked>Glomerulus outlines</label></div>
+</section>
+
+<section class="wide">
+<h2><span class="n">2</span>Glomerular response maps — both bulbs, dorsal view</h2>
+<div class="row">
+<button id="play" class="primary">▶ Play</button>
+<select id="speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
+<select id="view"><option value="movie">Movie (ΔF/F vs time)</option><option value="mean">Mean map of presentation…</option><option value="peak">Peak map (signed, whole trial)</option></select>
+<select id="pres"></select>
+<input id="scrub" type="range" min="0" max="1000" value="0" style="flex:1;min-width:160px">
+<span id="tlabel" class="info" style="width:120px;text-align:right"></span>
+</div>
+<div class="maps">
+<div class="mapbox"><div class="maptitle"><b style="color:var(--in)">INPUT · OSN terminals</b><span id="inScaleLbl"></span></div><canvas id="mapIn"></canvas></div>
+<div class="mapbox"><div class="maptitle"><b style="color:var(--out)">OUTPUT · M/T cells (sisters pooled)</b><span id="outScaleLbl"></span></div><canvas id="mapOut"></canvas></div>
+</div>
+<div class="row"><div class="info" id="selinfo"></div></div>
+<div class="row"><label class="chk">Trace window</label><select id="traceWin"><option value="full">Full trial</option><option value="zoom">Selected presentation (sniff-locked detail)</option></select>
+<div class="legend"><span><i class="sw" style="background:var(--in)"></i>input ΔF/F</span><span><i class="sw" style="background:var(--out)"></i>output ΔF/F</span><span><i class="sw" style="background:#9be29b"></i>presynaptic resource R</span><span><i class="sw" style="background:#ffd166"></i>tufted</span><span><i class="sw" style="background:#c084fc"></i>mitral</span><span>dashed = homolog</span></div></div>
+<canvas id="traces" class="plot"></canvas>
+</section>
+
+<section class="wide">
+<h2><span class="n">3</span>Response dynamics: input vs output across glomeruli</h2>
+<div class="plots rasters">
+<div><canvas id="rIn" class="plot"></canvas><div class="cap">Input ΔF/F for each responsive glomerulus (rows) over the selected presentation, normalized per row. Rows are sorted by input onset latency.</div></div>
+<div><canvas id="rOut" class="plot"></canvas><div class="cap">Output ΔF/F for the same rows in the same order, normalized per row (red = excitation, blue = suppression). The output dynamics are far more varied than the input.</div></div>
+<div><canvas id="pTypes" class="plot"></canvas><div class="cap">Temporal response types in the selected presentation: sustained, transient, delayed, suppressed, biphasic, and offset-only. Input is orange, output cyan.</div></div>
+</div>
+</section>
+
+<section>
+<h2><span class="n">4</span>Circuit</h2>
+<svg viewBox="0 0 340 170" width="100%" style="max-height:190px">
+ <defs><marker id="ah" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0L6,3L0,6z" fill="#8b96a5"/></marker>
+ <marker id="ib" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="6" markerHeight="6"><circle cx="3" cy="3" r="2.5" fill="#5b8cff"/></marker></defs>
+ <text x="4" y="12" fill="#8b96a5">OSN axons · sniff-dependent depression R</text>
+ <line x1="70" y1="18" x2="70" y2="40" stroke="#ffb02e" stroke-width="2" marker-end="url(#ah)"/>
+ <line x1="250" y1="18" x2="250" y2="40" stroke="#ffb02e" stroke-width="2" marker-end="url(#ah)"/>
+ <circle cx="70" cy="58" r="17" fill="none" stroke="#ffb02e"/><circle cx="250" cy="58" r="17" fill="none" stroke="#ffb02e"/>
+ <text x="58" y="61">glom</text><text x="238" y="61">glom</text>
+ <circle cx="104" cy="50" r="5" fill="#5b8cff"/><text x="111" y="47">PG</text>
+ <line x1="104" y1="55" x2="84" y2="62" stroke="#5b8cff" marker-end="url(#ib)"/>
+ <path d="M90,40 Q160,15 232,44" fill="none" stroke="#5b8cff" stroke-dasharray="4 3" marker-end="url(#ib)"/>
+ <text x="128" y="24" fill="#5b8cff">SA cell: ORN/(1+w·μ)</text>
+ <line x1="64" y1="75" x2="58" y2="118" stroke="#4fc3f7" stroke-width="2"/><line x1="76" y1="75" x2="84" y2="118" stroke="#4fc3f7" stroke-width="2"/>
+ <circle cx="56" cy="122" r="6" fill="#c084fc"/><circle cx="86" cy="98" r="5" fill="#ffd166"/>
+ <text x="22" y="126">M</text><text x="94" y="96">T</text>
+ <line x1="244" y1="75" x2="250" y2="118" stroke="#4fc3f7" stroke-width="2"/><circle cx="250" cy="122" r="6" fill="#c084fc"/>
+ <line x1="62" y1="124" x2="244" y2="124" stroke="#4fc3f7" stroke-width="1"/>
+ <circle cx="150" cy="148" r="6" fill="#5b8cff"/><text x="160" y="152" fill="#5b8cff">GC: local + selective ensembles</text>
+ <line x1="150" y1="142" x2="150" y2="127" stroke="#5b8cff"/>
+ <text x="2" y="168" fill="#8b96a5">output = f_T·T + (1−f_T)·M (per-glomerulus f_T)</text>
+</svg>
+<div class="row"><label class="chk"><input type="checkbox" id="SAon" checked>SA cells</label><label class="chk"><input type="checkbox" id="PGon" checked>PG feed-forward</label><label class="chk"><input type="checkbox" id="GCon" checked>Granule cells</label><label class="chk"><input type="checkbox" id="DEPon" checked>Sniff adaptive filter</label></div>
+<h3>Input (ORN) dynamics</h3><div id="ctl-orn"></div>
+<h3>Glomerular gain &amp; normalization</h3><div id="ctl-gain"></div>
+<h3>MTC dynamics &amp; lateral inhibition</h3><div id="ctl-mtc"></div>
+<button id="reset">Reset circuit defaults</button>
+</section>
+
+<section>
+<h2><span class="n">5</span>Input–output gain (Storace et al.)</h2>
+<div class="plots">
+<div><canvas id="pGain" class="plot"></canvas><div class="cap">Static gain versus normalized input ORN̄: MTC excitation (cyan), PG inhibition (blue), net (white), all multiplied by g<sub>MT</sub>.</div></div>
+<div><canvas id="pScatter" class="plot"></canvas><div class="cap">Mean input versus mean output ΔF/F in the selected presentation, all glomeruli. Gold marks the selected glomerulus.</div></div>
+<div><canvas id="pSniff" class="plot"></canvas><div class="cap">Adaptive filter, steady state: summed input during the last second of a 4 s presentation of odorant A, plotted against sniff rate and normalized to 1 Hz without the filter. Without the filter, sustained input keeps rising with sniff rate. With the filter, it plateaus above about 3 Hz, so a sustained odor is attenuated relative to new input. The background odorant is included if set.</div></div>
+</div>
+</section>
+
+<section class="wide">
+<h2><span class="n">6</span>Concentration series of odorant A (single presentation, 7 concentrations, background as set)</h2>
+<div class="plots">
+<div><canvas id="pPop" class="plot"></canvas><div class="cap">Summed responses (solid, normalized) and the fraction of glomeruli responding (dashed).</div></div>
+<div><canvas id="pSel" class="plot"></canvas><div class="cap">Selected glomerulus: input is monotonic, while output can be I, D, ID or DI.</div></div>
+<div><canvas id="pCorr" class="plot"></canvas><div class="cap">Map correlation with the highest-concentration map, over glomeruli that respond at any concentration.</div></div>
+<div><canvas id="pCat" class="plot"></canvas><div class="cap">Output concentration categories, left bulb. Grey shows in vivo (Subramanian et al.): I 37%, D 14%, DI 10%, ID 39%.</div></div>
+</div>
+<div class="row"><button id="csv">Copy response map as CSV</button><span class="info" id="csvmsg"></span></div>
+</section>
+
+<section class="wide notes">
+<h2>Model &amp; sources</h2>
+<details open><summary>Equations (dt = 10 ms, all glomeruli in both bulbs)</summary>
+<ul>
+<li><b>Stimulus:</b> valves for odorants A and B (low-pass, τ = 50 ms) plus a constant background. The model warms up long enough for the background-adapted state to settle, and ΔF/F is taken relative to that adapted baseline, as in experiments. Sniffing is a sinusoidal inhalation over a fixed fraction of each cycle, with instantaneous rate f(t). Per-sniff peak flow scales as √(f/3 Hz). Faster sniffs are shallower but still deliver more odor per second.</li>
+<li><b>Receptor activation, including mixtures:</b> u<sub>g</sub> = c<sub>A</sub>/κ<sub>gA</sub> + c<sub>B</sub>/κ<sub>gB</sub> + c<sub>bg</sub>/κ<sub>g,bg</sub>. Activation = 2·uⁿ/(1+uⁿ), i.e. competitive binding at one site with a receptor-specific Hill n (1–4). This gives mixture suppression and saturation within a glomerulus.</li>
+<li><b>Sniff adaptive filter</b> (Verhagen et al. 2007): a presynaptic resource R<sub>g</sub> is depleted by the glomerulus's own lagged ORN output z (τ = 200 ms): dR/dt = (1−R)/τ<sub>rec</sub> − U<sub>g</sub>·z²·R, and the drive passed on is drive·R. Depletion lags each inhalation, so at about 1–2 Hz R recovers before the next sniff. At 5–8 Hz it cannot, so sustained or background odorants are attenuated while a newly arriving odor is still passed on (difference coding). The first sniff of a bout is transmitted in full (Spors et al. 2006).</li>
+<li><b>ORN dynamics vary by glomerulus</b> (Spors et al. 2006; Wachowiak &amp; Cohen 2001): each glomerulus has its own latency, rise τ (15–400 ms), decay τ (40–1000 ms), and tonic adaptation (τ = 2.5 s). A slow decay τ means weak sniff modulation and a tonic response; a fast one means strongly sniff-locked, phasic input. Diversity is set by the "ORN dynamic diversity" slider (0 = identical).</li>
+<li><b>SA cells:</b> ORN̄ = ORN/(1 + w<sub>SA</sub>·μ), with μ the distance-weighted mean ORN activity (bulb-wide by default). <b>Glomerular gain:</b> drive = g<sub>MT</sub>·[ORN̄³/(κm³+ORN̄³) − β·ORN̄⁴·⁵/(κp⁴·⁵+ORN̄⁴·⁵)] (Subramanian et al.).</li>
+<li><b>MTC output varies by glomerulus:</b> tufted (τ = 30 ms) and mitral (τ = 80 ms, via an extra 50 ms ET stage) cells, with a tufted fraction specific to each glomerulus. Each glomerulus also has its own spike-frequency adaptation (τ = 1.5 s), which makes responses transient or sustained, and its own post-inhibitory rebound (τ = 0.4 s), which produces offset excitation and sag during suppression. Diversity is set by "MTC dynamic diversity".</li>
+<li><b>Lateral inhibition following Economo et al. 2016:</b> inhibition = s<sub>g</sub>·w·[(1−ψ)·G<sub>local</sub> + ψ·k<sub>sel</sub>·G<sub>sel</sub>]. G<sub>local</sub> is recurrent GC inhibition, integrating Σ K<sub>dist</sub>·(M+½T). G<sub>sel</sub> is feed-forward interglomerular inhibition, integrating Σ W<sub>sel</sub>·[excitatory glomerular drive]. Feed-forward wiring keeps strong selective inhibition stable. Both have a time constant specific to each glomerulus, which gives delayed suppression. W<sub>sel</sub> is a sparse, fixed, non-random connectivity: glomeruli belong to latent "ensembles" and preferentially inhibit a partner ensemble, regardless of distance. Excited and suppressed glomeruli are therefore spatially intermingled, and only some glomeruli are strongly suppressible, because each has its own inhibition sensitivity s<sub>g</sub>.</li>
+<li><b>Baseline:</b> GC inhibition and MTC adaptation act on deviations from the spontaneous state, fixed 1.5 s into the warm-up before any odor. Every glomerulus therefore keeps spontaneous activity and can show suppression. The background odorant starts at 2 s, so its evoked inhibition and adaptation are included.</li>
+<li><b>Indicators:</b> asymmetric kinetics (fast rise τ, slow decay τ) feed saturating fluorescence; ΔF/F is taken against the 1 s before the first presentation.</li>
+<li><b>Defaults:</b> β = 0.3 and w<sub>SA</sub> = 2.5 (Subramanian et al. used 0.6 and 1; the published values can be set with the sliders). Not modeled: cholinergic and dopaminergic modulation, centrifugal feedback, retronasal stimulation.</li>
+</ul></details>
+<details><summary>Numbers and references</summary>
+<ul>
+<li>Count: about 2,850 glomeruli per mouse OB (Weng et al., Eur J Neurosci 2025). Wide-field imaging resolves about 100–200 per dorsal bulb: merging the maps of 40 natural odorants gave about 127 dorsal glomeruli (Vincis et al. 2012). The default here is 150 per bulb.</li>
+<li>Storace &amp; Cohen 2017 <i>Nat Commun</i>; Subramanian … Storace 2025/26 (bioRxiv 2025.02.28.640652; <i>J Physiol</i>): input–output transformation and response categories.</li>
+<li>Verhagen, Wesson, Netoff, White &amp; Wachowiak 2007 <i>Nat Neurosci</i> 10:631: sniffing controls an adaptive filter of ORN input.</li>
+<li>Spors, Wachowiak, Cohen &amp; Friedrich 2006 <i>J Neurosci</i> 26:1247: glomerulus- and odorant-specific input dynamics.</li>
+<li>Economo, Hansen &amp; Wachowiak 2016 <i>Neuron</i> 91:397: selective, non-random interglomerular inhibition, intermingled excitation and suppression, and mixture suppression.</li>
+<li>Moran, Eiting &amp; Wachowiak 2021 <i>eNeuro</i>: MT dynamics track glutamatergic drive. Short &amp; Wachowiak 2019 <i>eNeuro</i>: inhalation-linked dynamics across cell types.</li>
+<li>Banerjee et al. 2015 <i>Neuron</i>: SA-cell gain control. Shusterman et al. 2011 and Chong et al. 2020 (Rinberg lab): sniff-locked latency codes.</li>
+<li>Cleland and Shepherd/Migliore network models (realistic interneuron and GC architecture), reduced here to rate kernels.</li>
+</ul></details>
+</section>
+</main>
+
+<script id="model">
+// ================= MODEL (no DOM) =================
+const OB=(()=>{
+function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+function gauss(r){let u=0;while(!u)u=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*r());}
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const GEO={ax:600,by:850,cx:650,W:2700,H:1900};
+const ODORS=[
+ {name:'Ethyl butyrate',u:0.05,v:0.15,s:0.45,k0:-1.3},
+ {name:'Methyl valerate',u:0.25,v:-0.05,s:0.5,k0:-1.2},
+ {name:'2-Hexanone',u:-0.45,v:-0.25,s:0.4,k0:-1.0},
+ {name:'2-Heptanone',u:-0.5,v:-0.1,s:0.4,k0:-1.1},
+ {name:'Isoamyl acetate',u:-0.25,v:0.3,s:0.45,k0:-1.1},
+ {name:'Hexanal',u:-0.05,v:0.6,s:0.38,k0:-1.2},
+ {name:'Valeric acid (DI)',u:0.35,v:0.7,s:0.3,k0:-0.9},
+ {name:'Acetophenone',u:0.45,v:-0.55,s:0.35,k0:-0.8},
+ {name:'Benzaldehyde',u:-0.3,v:-0.6,s:0.35,k0:-0.9}];
+const IND={GCaMP3:{tr:0.08,td:0.6,R:1.2},GCaMP6s:{tr:0.12,td:1.0,R:4.4},spH:{tr:0.25,td:2.5,R:0.7},CaDye:{tr:0.03,td:0.4,R:0.5},
+ GCaMP6f:{tr:0.04,td:0.3,R:1.6},GCaMP8m:{tr:0.015,td:0.15,R:2.0},jRCaMP1b:{tr:0.08,td:0.6,R:0.8}};
+const NENS=6;
+
+function buildGlomeruli(N,seed){
+ const r=rng(seed*977+3),pts=[],R=0.92;
+ let dmin=0.85*Math.sqrt(Math.PI*R*R*GEO.ax*GEO.by/N),fails=0;
+ while(pts.length<N){const u=(r()*2-1)*R,v=(r()*2-1)*R;if(u*u+v*v>R*R)continue;
+  let ok=true;for(const p of pts){const dx=(p.u-u)*GEO.ax,dy=(p.v-v)*GEO.by;if(dx*dx+dy*dy<dmin*dmin){ok=false;break;}}
+  if(ok){pts.push({u,v,rad:22+r()*18});fails=0;}else if(++fails>3000){dmin*=0.93;fails=0;}}
+ // receptor-level properties (shared by mirror-symmetric homologs)
+ const rp=rng(seed*131+11),Z=()=>{const a=new Float64Array(N);for(let k=0;k<N;k++)a[k]=gauss(rp);return a;};
+ const rec={n:new Float64Array(N),ens:new Int32Array(N),zr:Z(),zd:Z(),zl:Z(),za:Z(),zU:Z(),zs:Z(),zad:Z(),zrb:Z(),zgc:Z(),zfT:Z()};
+ for(let k=0;k<N;k++){rec.n[k]=1+3*rp();rec.ens[k]=Math.floor(rp()*NENS);}
+ const G=[];
+ for(let b=0;b<2;b++)for(let k=0;k<N;k++){const p=pts[k];const jx=b?gauss(r)*12:0,jy=b?gauss(r)*12:0;
+  G.push({b,k,u:p.u,v:p.v,x:b===0?-GEO.cx+p.u*GEO.ax:GEO.cx-p.u*GEO.ax+jx,y:-p.v*GEO.by+jy,rad:p.rad});}
+ return{N,G,rec,seed};}
+
+function buildTuning(GL,oi,seed){
+ const o=ODORS[oi],N=GL.N,r=rng(seed*31+oi*7919+17);
+ const logK=new Float64Array(N),jit=new Float64Array(N);
+ for(let k=0;k<N;k++){const p=GL.G[k];const d2=((p.u-o.u)**2+(p.v-o.v)**2)/(2*o.s*o.s);
+  let a=Math.exp(-d2)*(0.2+0.8*r());if(r()<0.06)a=Math.max(a,0.15+0.6*r());
+  logK[k]=a<0.12?Infinity:o.k0+2.4*(1-a)+0.2*gauss(r);jit[k]=r()*0.06;}
+ return{logK,jit};}
+
+function buildKernels(GL,gcSig,saSig){
+ const N=GL.N,N2=2*N,G=GL.G;
+ // distance-dependent GC kernel (incl. self)
+ const start=new Int32Array(N2+1),idx=[],w=[];
+ for(let g=0;g<N2;g++){start[g]=idx.length;let s=0;const lo=G[g].b*N;const tmp=[];
+  for(let h=lo;h<lo+N;h++){const dx=G[g].x-G[h].x,dy=G[g].y-G[h].y,d2=dx*dx+dy*dy;
+   if(d2<6.25*gcSig*gcSig){const ww=Math.exp(-d2/(2*gcSig*gcSig));tmp.push([h,ww]);s+=ww;}}
+  for(const[h,ww]of tmp){idx.push(h);w.push(ww/s);}}
+ start[N2]=idx.length;
+ // selective, non-random ensemble inhibition (distance-independent), receptor-level then mapped to both bulbs
+ const r=rng(GL.seed*53+5),ens=GL.rec.ens,src=[];
+ for(let k=0;k<N;k++){const partner=(ens[k]+1+Math.floor(NENS/2))%NENS;const lst=[];let s=0;
+  for(let j=0;j<N;j++){if(j===k)continue;const p=ens[j]===partner?0.35:0.03;if(r()<p){const ww=0.3+r();lst.push([j,ww]);s+=ww;}}
+  src.push(s>0?lst.map(([j,ww])=>[j,ww/s]):[]);}
+ const sStart=new Int32Array(N2+1),sIdx=[],sW=[];
+ for(let g=0;g<N2;g++){sStart[g]=sIdx.length;const lo=G[g].b*N;for(const[j,ww]of src[G[g].k]){sIdx.push(lo+j);sW.push(ww);}}
+ sStart[N2]=sIdx.length;
+ const saGlobal=saSig>=2500;let Ksa=null;
+ if(!saGlobal){Ksa=new Float64Array(N2*N);
+  for(let g=0;g<N2;g++){const lo=G[g].b*N;let s=0;
+   for(let j=0;j<N;j++){const h=lo+j,dx=G[g].x-G[h].x,dy=G[g].y-G[h].y;const ww=Math.exp(-(dx*dx+dy*dy)/(2*saSig*saSig));Ksa[g*N+j]=ww;s+=ww;}
+   for(let j=0;j<N;j++)Ksa[g*N+j]/=s;}}
+ return{start,idx:Int32Array.from(idx),w:Float64Array.from(w),sStart,sIdx:Int32Array.from(sIdx),sW:Float64Array.from(sW),saGlobal,Ksa};}
+
+function schedule(Q){const warm=Q.bgOn?10:3;const on=[],odors=[];let t0=warm+Q.pre;
+ for(let p=0;p<Q.npulse;p++){on.push(t0);t0+=Q.dur+Q.isi;
+  let s;switch(Q.pattern){case'A':s=[1,0];break;case'B':s=[0,1];break;case'alt':s=p%2?[0,1]:[1,0];break;case'mix':s=[1,1];break;default:s=[[1,0],[0,1],[1,1]][p%3];}
+  odors.push(s);}
+ return{warm,on,odors,tEnd:on[on.length-1]+Q.dur+Q.post};}
+
+function simulate(GL,TA,TB,TBG,KER,Q){
+ const N=GL.N,N2=2*N,dt=0.01,rec=2,S=schedule(Q),warm=S.warm,on=S.on;
+ const steps=Math.ceil(S.tEnd/dt),w0=Math.round(warm/dt),nR=Math.floor((steps-w0)/rec);
+ const cA=Math.pow(10,Q.logcA),cB=Math.pow(10,Q.logcB),cBG=Q.bgOn?Math.pow(10,Q.logcBG):0;
+ const vA=new Float64Array(steps),vB=new Float64Array(steps),flow=new Float64Array(steps),fr=new Float64Array(steps);
+ let fa=0,fb=0,ph=0;const gIn=Math.PI/(2*Q.inhf);
+ for(let i=0;i<steps;i++){const t=i*dt;let a=0,b=0,f=Q.f0;
+  for(let p=0;p<on.length;p++){if(t>=on[p]&&t<on[p]+Q.dur){a=S.odors[p][0];b=S.odors[p][1];}
+   if(Q.boutOn&&t>=on[p]+Q.boutStart&&t<on[p]+Q.boutStart+Q.boutDur)f=Q.f1;}
+  fa+=dt/0.05*(a-fa);fb+=dt/0.05*(b-fb);vA[i]=fa;vB[i]=fb;fr[i]=f;
+  ph=(ph+f*dt)%1;flow[i]=ph<Q.inhf?Math.sin(Math.PI*ph/Q.inhf)*Math.sqrt(f/3):0;}
+ const dI=Q.divIn,dO=Q.divOut,R0=GL.rec;
+ const iKA=new Float64Array(N2),iKB=new Float64Array(N2),iKG=new Float64Array(N2),nn=new Float64Array(N2),del=new Int32Array(N2),
+  tr=new Float64Array(N2),td=new Float64Array(N2),aS=new Float64Array(N2),Ug=new Float64Array(N2),
+  sI=new Float64Array(N2),adM=new Float64Array(N2),rho=new Float64Array(N2),tG=new Float64Array(N2),fTg=new Float64Array(N2);
+ const usesA=S.odors.some(o=>o[0]),usesB=S.odors.some(o=>o[1]);
+ for(let g=0;g<N2;g++){const k=g%N;nn[g]=R0.n[k];
+  const ka=TA.logK[k],kb=TB.logK[k],kg=TBG?TBG.logK[k]:Infinity;
+  iKA[g]=isFinite(ka)?Math.pow(10,-ka):0;iKB[g]=isFinite(kb)?Math.pow(10,-kb):0;iKG[g]=isFinite(kg)?Math.pow(10,-kg):0;
+  const up=Math.max(usesA?cA*iKA[g]:0,usesB?cB*iKB[g]:0);const jit=(usesA&&cA*iKA[g]>=cB*iKB[g])?TA.jit[k]:TB.jit[k];
+  del[g]=Math.round((0.02+jit*(0.5+dI)+0.14*Math.exp(0.6*dI*R0.zl[k])/(1+up))/dt);
+  tr[g]=clamp(0.04*Math.exp(0.9*dI*R0.zr[k]),0.015,0.4);td[g]=clamp(0.08*Math.exp(1.0*dI*R0.zd[k]),0.04,1.0);
+  aS[g]=Q.adapt*Math.exp(0.7*dI*R0.za[k]);Ug[g]=Q.DEPon?Q.U*Math.exp(0.5*dI*R0.zU[k]):0;
+  sI[g]=Math.exp(1.0*dO*R0.zs[k]-0.5*dO*dO);adM[g]=Q.mtcAdapt*Math.exp(0.9*dO*R0.zad[k]);
+  rho[g]=Q.rebound*clamp(1+1.2*dO*R0.zrb[k],0,3);tG[g]=Q.tauGC*Math.exp(0.7*dO*R0.zgc[k]);fTg[g]=clamp(Q.fT+0.3*dO*R0.zfT[k],0,1);}
+ const rO=new Float64Array(N2),zR=new Float64Array(N2),y=new Float64Array(N2),A=new Float64Array(N2),Rr=new Float64Array(N2).fill(1),mu=new Float64Array(N2),muR=new Float64Array(N2),dM=new Float64Array(N2),
+  T=new Float64Array(N2).fill(Q.bT*0.7),M=new Float64Array(N2).fill(Q.bM*0.5),Gc=new Float64Array(N2).fill(0.15),Ad=new Float64Array(N2),H=new Float64Array(N2),
+  yi=new Float64Array(N2),ci=new Float64Array(N2),yo=new Float64Array(N2),co=new Float64Array(N2);
+ const Fin=new Float32Array(nR*N2),Fout=new Float32Array(nR*N2),Tr=new Float32Array(nR*N2),Mr=new Float32Array(nR*N2),RR=new Float32Array(nR*N2);
+ const aR=new Float32Array(nR),bR=new Float32Array(nR),flR=new Float32Array(nR),frR=new Float32Array(nR);
+ const iI=IND[Q.indIn],iO=IND[Q.indOut],KdI=5,KdO=1.0;
+ const wSA=Q.SAon?Q.wSA:0,beta=Q.PGon?Q.beta:0,wGC=Q.GCon?Q.wGC:0,psi=Q.psi,kSel=Q.kSel;
+ const km3=Math.pow(Q.km,3),kp45=Math.pow(Q.kp,4.5),tauT=0.03,tauM=0.08;
+ const{start,idx,w,sStart,sIdx,sW}=KER;
+ const wFix=Math.round(1.5/dt),Gc0=new Float64Array(N2),Gs0=new Float64Array(N2),Gs=new Float64Array(N2),Ad0=new Float64Array(N2);let fixed=false,bgr=0;
+ for(let i=0;i<steps;i++){
+  if(i*dt>=2)bgr+=dt/0.3*(1-bgr);
+  if(i===wFix){Gc0.set(Gc);Gs0.set(Gs);Ad0.set(Ad);fixed=true;}
+  for(let g=0;g<N2;g++){let drv=0;const j=i-del[g];
+   if(j>=0&&flow[j]>0){const u=cA*vA[j]*iKA[g]+cB*vB[j]*iKB[g]+cBG*bgr*iKG[g];if(u>1e-9){const un=Math.pow(u,nn[g]);drv=gIn*2*un/(1+un)*flow[j];}}
+   zR[g]+=dt/0.2*(rO[g]-zR[g]);Rr[g]+=dt*((1-Rr[g])/Q.tauRec-Ug[g]*zR[g]*zR[g]*Rr[g]);if(Rr[g]<0)Rr[g]=0;
+   y[g]+=dt/tr[g]*(drv*Rr[g]*Math.max(0,1-aS[g]*A[g])-y[g]);rO[g]+=dt/td[g]*(y[g]-rO[g]);A[g]+=dt/2.5*(rO[g]-A[g]);}
+  if(KER.saGlobal){for(let b=0;b<2;b++){let s=0;for(let j=b*N;j<b*N+N;j++)s+=rO[j];s/=N;for(let j=b*N;j<b*N+N;j++)muR[j]=s;}}
+  else{const K=KER.Ksa;for(let g=0;g<N2;g++){const lo=GL.G[g].b*N;let s=0;const o=g*N;for(let j=0;j<N;j++)s+=K[o+j]*rO[lo+j];muR[g]=s;}}
+  for(let g=0;g<N2;g++){mu[g]+=dt/Q.tauSA*(muR[g]-mu[g]);
+   const x=rO[g]/(1+wSA*mu[g]);const x3=x*x*x,x45=Math.pow(x,4.5);
+   const drv=Q.gMT*(x3/(km3+x3)-beta*x45/(kp45+x45));
+   dM[g]+=dt/0.05*(drv-dM[g]);
+   const inh=fixed?sI[g]*wGC*((1-psi)*(Gc[g]-Gc0[g])+psi*kSel*(Gs[g]-Gs0[g])):0,reb=rho[g]*H[g],ad=fixed?adM[g]*(Ad[g]-Ad0[g]):0;
+   H[g]+=dt/0.4*(Math.max(0,-(Q.bM+dM[g]-inh))-H[g]);
+   T[g]+=dt/tauT*(Math.max(0,Q.bT+drv-0.3*inh-ad+reb)-T[g]);
+   M[g]+=dt/tauM*(Math.max(0,Q.bM+dM[g]-inh-ad+reb)-M[g]);
+   Ad[g]+=dt/1.5*(M[g]+0.5*T[g]-Ad[g]);}
+  for(let g=0;g<N2;g++){let s1=0,s2=0;for(let q=start[g];q<start[g+1];q++){const h=idx[q];s1+=w[q]*(M[h]+0.5*T[h]);}
+   for(let q=sStart[g];q<sStart[g+1];q++){const h=sIdx[q];s2+=sW[q]*Math.max(0,dM[h]);}
+   Gc[g]+=dt/tG[g]*(s1-Gc[g]);Gs[g]+=dt/tG[g]*(s2-Gs[g]);}
+  for(let g=0;g<N2;g++){const di=rO[g]-ci[g];ci[g]+=dt*di/(di>0?iI.tr:iI.td);
+   const ro=fTg[g]*T[g]+(1-fTg[g])*M[g],dd=ro-co[g];co[g]+=dt*dd/(dd>0?iO.tr:iO.td);}
+  if(i>=w0&&(i-w0)%rec===0){const f=(i-w0)/rec;if(f<nR){const o=f*N2;
+   for(let g=0;g<N2;g++){const a=Math.max(ci[g],0),b=Math.max(co[g],0);
+    Fin[o+g]=1+iI.R*a/(a+KdI);Fout[o+g]=1+iO.R*b/(b+KdO);Tr[o+g]=T[g];Mr[o+g]=M[g];RR[o+g]=Rr[g];}
+   aR[f]=vA[i];bR[f]=vB[i];flR[f]=flow[i];frR[f]=fr[i];}}
+ }
+ const dtR=rec*dt,onR=on.map(x=>x-warm),f0a=Math.max(0,Math.floor((onR[0]-1)/dtR)),f0b=Math.max(f0a+1,Math.floor(onR[0]/dtR));
+ const inD=new Float32Array(nR*N2),outD=new Float32Array(nR*N2);const r=rng(9173+(Q.seed|0));
+ for(let g=0;g<N2;g++){let a=0,b=0;for(let f=f0a;f<f0b;f++){a+=Fin[f*N2+g];b+=Fout[f*N2+g];}a/=(f0b-f0a);b/=(f0b-f0a);
+  for(let f=0;f<nR;f++){const o=f*N2+g;inD[o]=Fin[o]/a-1+(Q.noise?Q.noise*gauss(r):0);outD[o]=Fout[o]/b-1+(Q.noise?Q.noise*gauss(r):0);}}
+ return{N,N2,nR,dtR,on:onR,odors:S.odors,dur:Q.dur,inD,outD,Tr,Mr,RR,aR,bR,flR,frR,total:nR*dtR,cBG};}
+
+function windowMean(res,arr,t1,t2){const{N2,dtR,nR}=res;const a=Math.max(0,Math.floor(t1/dtR)),b=Math.min(nR,Math.ceil(t2/dtR));
+ const out=new Float64Array(N2);for(let f=a;f<b;f++){const o=f*N2;for(let g=0;g<N2;g++)out[g]+=arr[o+g];}for(let g=0;g<N2;g++)out[g]/=Math.max(1,b-a);return out;}
+function gainCurve(x,Q){const x3=x*x*x;const ex=x3/(Q.km**3+x3);const pg=(Q.PGon?Q.beta:0)*x**4.5/(Q.kp**4.5+x**4.5);return{ex:Q.gMT*ex,pg:Q.gMT*pg,net:Q.gMT*(ex-pg)};}
+// temporal response type of one trace segment
+function respType(tr,dtR,dur,thr){const nOn=Math.min(tr.length,Math.round(dur/dtR));let mx=-1e9,mn=1e9,imx=0,imn=0;
+ for(let i=0;i<nOn;i++){if(tr[i]>mx){mx=tr[i];imx=i;}if(tr[i]<mn){mn=tr[i];imn=i;}}
+ let off=-1e9;for(let i=nOn;i<tr.length;i++)off=Math.max(off,tr[i]);
+ const q=Math.max(1,Math.round(nOn*0.3));let late=0;for(let i=nOn-q;i<nOn;i++)late+=tr[i];late/=q;
+ const ex=mx>thr,su=mn<-thr;
+ if(!ex&&!su)return off>thr?'offset':null;
+ if(ex&&su)return'biphasic';
+ if(su)return'suppressed';
+ let t30=0;for(let i=0;i<nOn;i++)if(tr[i]>=0.3*mx){t30=i*dtR;break;}
+ if(t30>0.35)return'delayed';
+ return late<0.4*mx?'transient':'sustained';}
+return{GEO,ODORS,IND,buildGlomeruli,buildTuning,buildKernels,simulate,schedule,windowMean,gainCurve,respType,rng,gauss};
+})();
+if(typeof module!=='undefined')module.exports=OB;
+</script>
+
+<script>
+// ================= UI =================
+const $=id=>document.getElementById(id);
+const SL=[
+ ['logcA','Odorant A conc. log₁₀ (≈ % s.v.)',-2.5,1,0.1,-0.5,'stim'],
+ ['logcB','Odorant B conc. log₁₀',-2.5,1,0.1,-0.5,'stim'],
+ ['dur','Odor duration (s)',0.1,8,0.1,2,'stim'],
+ ['isi','Inter-stimulus interval (s)',1,30,0.5,8,'stim'],
+ ['npulse','Presentations',1,6,1,3,'stim'],
+ ['pre','Pre-odor baseline (s)',1,5,0.5,2,'stim'],
+ ['logcBG','Background conc. log₁₀',-3,0.5,0.1,-1,'bg'],
+ ['f0','Baseline breathing rate (Hz)',1,10,0.5,2,'sniff'],
+ ['inhf','Inhalation fraction of cycle',0.2,0.6,0.05,0.4,'sniff'],
+ ['f1','Sniff-bout rate (Hz)',2,10,0.5,8,'bout'],
+ ['boutStart','Bout start re. odor onset (s)',-2,3,0.1,-0.5,'bout'],
+ ['boutDur','Bout duration (s)',0.5,8,0.1,3,'bout'],
+ ['N','Resolved dorsal glomeruli / bulb',60,300,10,150,'img'],
+ ['blur','Wide-field blur σ (µm)',0,60,5,25,'img'],
+ ['noise','Noise σ (ΔF/F)',0,0.05,0.005,0.01,'img'],
+ ['divIn','ORN dynamic diversity',0,1.5,0.05,1,'orn'],
+ ['tauRec','Adaptive-filter recovery τ_rec (s)',0.05,2,0.05,0.3,'orn'],
+ ['U','Adaptive-filter depression U',0,6,0.1,2,'orn'],
+ ['adapt','Tonic ORN adaptation',0,0.8,0.05,0.3,'orn'],
+ ['wSA','SA-cell normalization weight',0,4,0.1,2.5,'gain'],
+ ['saSig','SA range σ µm (≥2500 = bulb-wide)',300,3000,100,3000,'gain'],
+ ['tauSA','SA time constant (s)',0.01,0.5,0.01,0.05,'gain'],
+ ['beta','PG feed-forward inhibition β',0,1.2,0.05,0.3,'gain'],
+ ['kp','PG half-activation κp',0.2,1.5,0.05,0.5,'gain'],
+ ['km','MTC half-activation κm',0.4,2,0.05,1,'gain'],
+ ['gMT','MTC excitatory gain g_MT',0.5,6,0.1,3,'gain'],
+ ['divOut','MTC dynamic diversity',0,1.5,0.05,1,'mtc'],
+ ['wGC','Lateral inhibition weight w',0,3,0.1,1.5,'mtc'],
+ ['psi','Selective (ensemble) fraction ψ',0,1,0.05,0.6,'mtc'],
+ ['kSel','Selective inhibition gain k_sel',0,10,0.5,5,'mtc'],
+ ['gcSig','GC local range σ (µm)',50,600,25,250,'mtc'],
+ ['tauGC','GC time constant (s)',0.05,1,0.05,0.25,'mtc'],
+ ['mtcAdapt','MTC spike-frequency adaptation',0,1.5,0.05,0.4,'mtc'],
+ ['rebound','Post-inhibitory rebound',0,1.5,0.05,0.4,'mtc'],
+ ['fT','Mean tufted fraction of signal',0,1,0.05,0.5,'mtc'],
+ ['bM','Mitral spontaneous drive',0,0.6,0.02,0.4,'mtc'],
+ ['bT','Tufted spontaneous drive',0,0.6,0.02,0.26,'mtc']];
+const REBUILD_G=new Set(['N']),REBUILD_K=new Set(['gcSig','saSig']),DISPLAY_ONLY=new Set(['blur']);
+for(const[id,lab,mn,mx,st,df,grp]of SL){const d=document.createElement('div');d.className='ctl';
+ d.innerHTML=`<label for="${id}">${lab}</label><input type="range" id="${id}" min="${mn}" max="${mx}" step="${st}" value="${df}"><output id="${id}_v"></output>`;
+ $('ctl-'+grp).appendChild(d);}
+OB.ODORS.forEach((o,i)=>{for(const s of['odorA','odorB','odorBG']){const op=document.createElement('option');op.value=i;op.textContent=o.name;$(s).appendChild(op);}});
+{const op=document.createElement('option');op.value=-1;op.textContent='None';$('odorBG').prepend(op);}
+$('odorA').value=0;$('odorB').value=2;$('odorBG').value=-1;
+function fmt(id,v){if(id.startsWith('logc'))return v.toFixed(1);if(id==='saSig')return v>=2500?'global':v.toFixed(0);return Math.abs(v)>=10?v.toFixed(0):(+v.toFixed(3)).toString();}
+const Q={};
+function readQ(){for(const[id]of SL){Q[id]=+$(id).value;$(id+'_v').textContent=fmt(id,Q[id]);}
+ Q.oA=+$('odorA').value;Q.oB=+$('odorB').value;Q.oBG=+$('odorBG').value;Q.bgOn=Q.oBG>=0;Q.pattern=$('pattern').value;Q.boutOn=$('boutOn').checked;
+ Q.indIn=$('indIn').value;Q.indOut=$('indOut').value;Q.SAon=$('SAon').checked;Q.PGon=$('PGon').checked;Q.GCon=$('GCon').checked;Q.DEPon=$('DEPon').checked;
+ Q.seed=+$('seed').value||1;Q.post=4;
+ while(Q.npulse>1&&Q.pre+Q.npulse*Q.dur+(Q.npulse-1)*Q.isi+Q.post>90)Q.npulse--;
+ document.querySelectorAll('#ctl-bout .ctl').forEach(e=>e.style.opacity=Q.boutOn?1:0.4);
+ document.querySelectorAll('#ctl-bg .ctl').forEach(e=>e.style.opacity=Q.bgOn?1:0.4);}
+
+let GL,TUN={},KER,RES,CONC=null,SNF=null,sel=-1,playing=false,tNow=0,lastTS=0,FP=null,MASK=null;
+const RW=270,RH=190,UMPX=10;
+const off=document.createElement('canvas');off.width=RW;off.height=RH;const offc=off.getContext('2d');const img=offc.createImageData(RW,RH);const acc=new Float32Array(RW*RH);
+function rebuildGlom(){GL=OB.buildGlomeruli(Q.N,Q.seed);TUN={};rebuildKer();rebuildFP();sel=-1;}
+function rebuildKer(){KER=OB.buildKernels(GL,Q.gcSig,Q.saSig);}
+function tun(o){if(o<0)return null;if(!TUN[o])TUN[o]=OB.buildTuning(GL,o,Q.seed);return TUN[o];}
+function sim(Qx){return OB.simulate(GL,tun(Qx.oA),tun(Qx.oB),tun(Qx.oBG),KER,Qx);}
+function rebuildFP(){const{GEO}=OB;FP=[];
+ for(const p of GL.G){const s=Math.sqrt((p.rad/1.3)**2+Q.blur**2),R=3*s,idx=[],w=[];
+  const x0=Math.max(0,Math.floor((p.x-R+GEO.W/2)/UMPX)),x1=Math.min(RW-1,Math.ceil((p.x+R+GEO.W/2)/UMPX));
+  const y0=Math.max(0,Math.floor((p.y-R+GEO.H/2)/UMPX)),y1=Math.min(RH-1,Math.ceil((p.y+R+GEO.H/2)/UMPX));
+  for(let iy=y0;iy<=y1;iy++)for(let ix=x0;ix<=x1;ix++){const ux=(ix+0.5)*UMPX-GEO.W/2,uy=(iy+0.5)*UMPX-GEO.H/2;const d2=(ux-p.x)**2+(uy-p.y)**2;
+   if(d2<R*R){idx.push(iy*RW+ix);w.push(Math.exp(-d2/(2*s*s)));}}
+  FP.push({idx:Int32Array.from(idx),w:Float32Array.from(w)});}
+ MASK=new Uint8Array(RW*RH);
+ for(let iy=0;iy<RH;iy++)for(let ix=0;ix<RW;ix++){const ux=(ix+0.5)*UMPX-GEO.W/2,uy=(iy+0.5)*UMPX-GEO.H/2;
+  for(const cx of[-GEO.cx,GEO.cx])if(((ux-cx)/GEO.ax)**2+(uy/GEO.by)**2<=1)MASK[iy*RW+ix]=1;}}
+
+let simTimer=null;
+function schedule(kind){$('simstat').textContent='computing…';clearTimeout(simTimer);simTimer=setTimeout(()=>run(kind),120);}
+function run(kind){const t=performance.now();readQ();
+ if(kind==='glom'||!GL)rebuildGlom();else if(kind==='ker')rebuildKer();
+ if(kind==='fp'){rebuildFP();drawAll();$('simstat').textContent='';return;}
+ RES=sim(Q);
+ const ps=$('pres'),cur=+ps.value||0;ps.innerHTML='';RES.on.forEach((o,p)=>{const op=document.createElement('option');op.value=p;op.textContent=`#${p+1}: ${odorLabel(RES.odors[p])}`;ps.appendChild(op);});ps.value=Math.min(cur,RES.on.length-1);
+ tNow=Math.min(tNow,RES.total);
+ $('simstat').textContent=`${2*Q.N} glomeruli · ${RES.total.toFixed(1)} s simulated in ${((performance.now()-t)/1000).toFixed(2)} s`;
+ computeSummaries();drawStim();drawAll();drawGain();
+ setTimeout(()=>{runConc();runSniff();},30);}
+function odorLabel(o){const a=OB.ODORS[Q.oA].name,b=OB.ODORS[Q.oB].name;return o[0]&&o[1]?`${a} + ${b}`:o[0]?a:b;}
+function presWin(){const p=+$('pres').value||0;return{p,t1:RES.on[p],t2:RES.on[p]+RES.dur};}
+function computeSummaries(){const R=RES,N2=R.N2,{t1,t2}=presWin();
+ R.mean={in:OB.windowMean(R,R.inD,t1,t2+0.3),out:OB.windowMean(R,R.outD,t1,t2+0.3)};
+ const pin=new Float32Array(N2),pout=new Float32Array(N2);
+ for(let f=0;f<R.nR;f++){const o=f*N2;for(let g=0;g<N2;g++){const a=R.inD[o+g],b=R.outD[o+g];if(a>pin[g])pin[g]=a;if(Math.abs(b)>Math.abs(pout[g]))pout[g]=b;}}
+ R.peak={in:pin,out:pout};
+ const sIn=[...pin].sort((a,b)=>a-b),sOut=[...pout].map(Math.abs).sort((a,b)=>a-b);
+ R.scaleIn=Math.max(0.02,sIn[Math.floor(0.98*(N2-1))]);R.scaleOut=Math.max(0.02,sOut[Math.floor(0.98*(N2-1))]);}
+
+const INF=[[0,0,0,4],[.2,31,12,72],[.4,85,15,109],[.6,165,44,96],[.8,232,95,36],[.9,249,149,10],[1,252,255,164]];
+function interp(st,v){v=Math.max(0,Math.min(1,v));for(let i=1;i<st.length;i++)if(v<=st[i][0]){const a=st[i-1],b=st[i],t=(v-a[0])/(b[0]-a[0]);return[a[1]+t*(b[1]-a[1]),a[2]+t*(b[2]-a[2]),a[3]+t*(b[3]-a[3])];}return st[st.length-1].slice(1);}
+const POS=[[0,10,10,14],[.35,120,20,40],[.7,230,80,40],[1,255,230,120]],NEG=[[0,10,10,14],[.4,30,60,160],[.75,60,140,255],[1,170,230,255]];
+function cmIn(v){return interp(INF,v);}function cmOut(v){return v>=0?interp(POS,v):interp(NEG,-v);}
+
+function frameVals(kind){const R=RES;const v=$('view').value;
+ if(v==='mean')return R.mean[kind];if(v==='peak')return R.peak[kind];
+ const f=Math.min(R.nR-1,Math.max(0,Math.round(tNow/R.dtR)));return(kind==='in'?R.inD:R.outD).subarray(f*R.N2,(f+1)*R.N2);}
+function setupCanvas(cv){const dpr=window.devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;
+ if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);}
+ const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);return{c,w,h};}
+function renderMap(cv,kind){if(!RES)return;const vals=frameVals(kind);const scale=kind==='in'?RES.scaleIn:RES.scaleOut;
+ acc.fill(0);for(let g=0;g<vals.length;g++){const v=vals[g];if(!v)continue;const fp=FP[g];for(let j=0;j<fp.idx.length;j++)acc[fp.idx[j]]+=v*fp.w[j];}
+ const d=img.data;for(let p=0;p<RW*RH;p++){const col=!MASK[p]?[7,9,12]:kind==='in'?cmIn(acc[p]/scale):cmOut(acc[p]/scale);
+  d[4*p]=col[0];d[4*p+1]=col[1];d[4*p+2]=col[2];d[4*p+3]=255;}
+ offc.putImageData(img,0,0);
+ const{c,w,h}=setupCanvas(cv);c.imageSmoothingEnabled=true;c.drawImage(off,0,0,w,h);
+ const{GEO}=OB,sx=w/GEO.W,sy=h/GEO.H,X=x=>(x+GEO.W/2)*sx,Y=y=>(y+GEO.H/2)*sy;
+ c.strokeStyle='#3d4655';c.lineWidth=1;for(const cx of[-GEO.cx,GEO.cx]){c.beginPath();c.ellipse(X(cx),Y(0),GEO.ax*sx,GEO.by*sy,0,0,2*Math.PI);c.stroke();}
+ if($('outlines').checked){c.strokeStyle='rgba(255,255,255,0.12)';for(const p of GL.G){c.beginPath();c.arc(X(p.x),Y(p.y),p.rad*sx,0,2*Math.PI);c.stroke();}}
+ if(sel>=0){const p=GL.G[sel],q=GL.G[(sel+GL.N)%(2*GL.N)];
+  c.strokeStyle='#ffd23f';c.lineWidth=2;c.beginPath();c.arc(X(p.x),Y(p.y),(p.rad+14)*sx,0,2*Math.PI);c.stroke();
+  c.setLineDash([4,3]);c.beginPath();c.arc(X(q.x),Y(q.y),(q.rad+14)*sx,0,2*Math.PI);c.stroke();
+  c.lineWidth=1;c.strokeStyle='rgba(91,140,255,.7)';c.beginPath();c.arc(X(p.x),Y(p.y),2*Q.gcSig*sx,0,2*Math.PI);c.stroke();c.setLineDash([]);
+  // selective inhibitory sources of the selected glomerulus
+  if(Q.psi>0){c.strokeStyle='rgba(91,140,255,.55)';for(let q2=KER.sStart[sel];q2<KER.sStart[sel+1];q2++){const s=GL.G[KER.sIdx[q2]];c.beginPath();c.moveTo(X(s.x),Y(s.y));c.lineTo(X(p.x),Y(p.y));c.stroke();}}}
+ c.fillStyle='#c3cbd6';c.font='11px system-ui';c.fillText('L bulb',X(-GEO.cx)-16,14);c.fillText('R bulb',X(GEO.cx)-16,14);
+ c.fillStyle='#8b96a5';c.fillText('A ↑',6,14);c.fillText('M → midline ← M',w/2-44,h-6);
+ c.strokeStyle='#c3cbd6';c.lineWidth=2;c.beginPath();c.moveTo(w-10-500*sx,h-12);c.lineTo(w-10,h-12);c.stroke();c.fillText('500 µm',w-10-500*sx,h-16);
+ const v=$('view').value;c.fillStyle='#fff';
+ if(v==='movie'){c.fillText(`t = ${tNow.toFixed(2)} s`,6,h-6);
+  const f=Math.min(RES.nR-1,Math.round(tNow/RES.dtR));let lab=[];if(RES.aR[f]>0.5)lab.push('A');if(RES.bR[f]>0.5)lab.push('B');
+  if(lab.length){c.fillStyle=lab.length===2?'#f0c060':lab[0]==='A'?'#e8577a':'#5fd38d';c.beginPath();c.arc(w/2-10,12,5,0,7);c.fill();c.fillText('ODOR '+lab.join('+'),w/2-2,16);}
+  c.fillStyle='#8b96a5';c.fillText(`${RES.frR[f].toFixed(1)} Hz${RES.cBG?' · bg':''}`,6,28);}
+ else c.fillText(v==='mean'?`mean ΔF/F, presentation #${(+$('pres').value||0)+1}`:'peak ΔF/F (signed)',6,h-6);
+ const cbw=90,cbx=w-cbw-10,cby=h-40;for(let i=0;i<cbw;i++){const t=kind==='in'?i/cbw:(i/cbw)*2-1;const col=kind==='in'?cmIn(t):cmOut(t);c.fillStyle=`rgb(${col[0]|0},${col[1]|0},${col[2]|0})`;c.fillRect(cbx+i,cby,1,7);}
+ c.fillStyle='#c3cbd6';c.font='10px system-ui';
+ if(kind==='in'){c.fillText('0',cbx,cby-2);c.fillText(scale.toFixed(2),cbx+cbw-22,cby-2);}else{c.fillText('−'+scale.toFixed(2),cbx-4,cby-2);c.fillText('+'+scale.toFixed(2),cbx+cbw-26,cby-2);}}
+function drawAll(){if(!RES)return;renderMap($('mapIn'),'in');renderMap($('mapOut'),'out');drawTraces();drawScatter();drawRasters();
+ $('inScaleLbl').textContent=`${$('indIn').selectedOptions[0].text} · 0–${RES.scaleIn.toFixed(2)} ΔF/F`;
+ $('outScaleLbl').textContent=`${$('indOut').selectedOptions[0].text} · ±${RES.scaleOut.toFixed(2)} ΔF/F`;
+ $('scrub').value=Math.round(1000*tNow/RES.total);$('tlabel').textContent=`${tNow.toFixed(2)} / ${RES.total.toFixed(1)} s`;}
+
+function nice(a,b,n=4){const span=b-a||1;const st0=Math.pow(10,Math.floor(Math.log10(span/n)));const e=span/n/st0;const s=(e>=7.5?10:e>=3.5?5:e>=1.5?2:1)*st0;const o=[];for(let v=Math.ceil(a/s)*s;v<=b+1e-9;v+=s)o.push(+v.toFixed(10));return o;}
+function axes(c,x,y,w,h,xr,yr,o={}){c.strokeStyle='#2f3744';c.lineWidth=1;c.strokeRect(x,y,w,h);
+ const X=v=>x+(v-xr[0])/(xr[1]-xr[0])*w,Y=v=>y+h-(v-yr[0])/(yr[1]-yr[0])*h;
+ c.fillStyle='#8b96a5';c.font='10px system-ui';
+ if(!o.noX)for(const t of nice(xr[0],xr[1],o.nx||5)){c.fillText(t,X(t)-6,y+h+11);c.strokeStyle='#1f252e';c.beginPath();c.moveTo(X(t),y);c.lineTo(X(t),y+h);c.stroke();}
+ if(!o.noY)for(const t of nice(yr[0],yr[1],o.ny||3)){c.fillText(t,x-c.measureText(t+'').width-3,Y(t)+3);}
+ if(yr[0]<0&&yr[1]>0){c.strokeStyle='#3a4250';c.setLineDash([2,3]);c.beginPath();c.moveTo(x,Y(0));c.lineTo(x+w,Y(0));c.stroke();c.setLineDash([]);}
+ if(o.yl){c.save();c.translate(10,y+h/2);c.rotate(-Math.PI/2);c.textAlign='center';c.fillText(o.yl,0,0);c.restore();}
+ if(o.xl){c.textAlign='center';c.fillText(o.xl,x+w/2,y+h+23);c.textAlign='left';}
+ if(o.title){c.fillStyle='#c3cbd6';c.font='11px system-ui';c.fillText(o.title,x+2,y-4);}
+ return{X,Y};}
+function line(c,X,Y,xs,ys,col,lw=1.5,dash){c.strokeStyle=col;c.lineWidth=lw;c.setLineDash(dash||[]);c.beginPath();for(let i=0;i<ys.length;i++){const px=X(xs(i)),py=Y(ys[i]);i?c.lineTo(px,py):c.moveTo(px,py);}c.stroke();c.setLineDash([]);}
+function valveBars(c,A,y,h,t1,t2){const R=RES;for(let p=0;p<R.on.length;p++){const o=R.on[p];if(o+R.dur<t1||o>t2)continue;const od=R.odors[p];
+ const x1=A.X(Math.max(o,t1)),x2=A.X(Math.min(o+R.dur,t2));c.fillStyle=od[0]&&od[1]?'rgba(240,192,96,.25)':od[0]?'rgba(232,87,122,.25)':'rgba(95,211,141,.25)';c.fillRect(x1,y,x2-x1,h);}}
+
+function drawStim(){const cv=$('stimc'),{c,w,h}=setupCanvas(cv),R=RES;const x0=34,ww=w-44;
+ let A=axes(c,x0,6,ww,44,[0,R.total],[0,1.3],{noX:true,ny:1});
+ if(R.cBG){c.fillStyle='rgba(160,170,185,.18)';c.fillRect(x0,6+44-44*0.25,ww,44*0.25);}
+ valveBars(c,A,6,44,0,R.total);line(c,A.X,A.Y,i=>i*R.dtR,R.flR,'#7d8796',1);
+ c.fillStyle='#8b96a5';c.fillText('odor / flow',x0+3,16);
+ A=axes(c,x0,58,ww,30,[0,R.total],[0,Math.max(10,...R.frR)],{ny:1,xl:'time (s)'});line(c,A.X,A.Y,i=>i*R.dtR,R.frR,'#c3cbd6',1.2);c.fillStyle='#8b96a5';c.fillText('sniff Hz',x0+3,68);}
+
+function drawTraces(){const cv=$('traces'),{c,w,h}=setupCanvas(cv);if(!RES)return;const R=RES;
+ let t1=0,t2=R.total;if($('traceWin').value==='zoom'){const pw=presWin();t1=Math.max(0,pw.t1-0.8);t2=Math.min(R.total,pw.t2+2);}
+ const a=Math.floor(t1/R.dtR),b=Math.min(R.nR,Math.ceil(t2/R.dtR));const x0=42,ww=w-52;const rows=[[6,44],[62,80],[156,80],[256,62]];const xs=i=>(a+i)*R.dtR;
+ const g=sel>=0?sel:argmax(R.peak.in),gh=(g+R.N)%R.N2;
+ const tr=(arr,gg)=>{const o=new Float32Array(b-a);for(let f=a;f<b;f++)o[f-a]=arr[f*R.N2+gg];return o;};
+ let A=axes(c,x0,rows[0][0],ww,rows[0][1],[t1,t2],[0,1.15],{noX:true,ny:1});valveBars(c,A,rows[0][0],rows[0][1],t1,t2);
+ line(c,A.X,A.Y,xs,R.flR.subarray(a,b).map(v=>v/Math.max(1,Math.max(...R.frR)/3)),'#5d6675',1);line(c,A.X,A.Y,xs,tr(R.RR,g),'#9be29b',1.6);
+ c.fillStyle='#8b96a5';c.fillText('odor · flow · R (presynaptic resource)',x0+4,rows[0][0]+10);
+ const ti=tr(R.inD,g),tih=tr(R.inD,gh),to=tr(R.outD,g),toh=tr(R.outD,gh),tt=tr(R.Tr,g),tm=tr(R.Mr,g);
+ const mm=arrs=>{let lo=0,hi=0.05;for(const s of arrs)for(const v of s){if(v<lo)lo=v;if(v>hi)hi=v;}const p=(hi-lo)*0.08;return[lo-p,hi+p];};
+ A=axes(c,x0,rows[1][0],ww,rows[1][1],[t1,t2],mm([ti,tih]),{noX:true,yl:'in ΔF/F'});valveBars(c,A,rows[1][0],rows[1][1],t1,t2);
+ line(c,A.X,A.Y,xs,tih,'rgba(255,176,46,.5)',1,[3,3]);line(c,A.X,A.Y,xs,ti,'#ffb02e',1.6);
+ A=axes(c,x0,rows[2][0],ww,rows[2][1],[t1,t2],mm([to,toh]),{noX:true,yl:'out ΔF/F'});valveBars(c,A,rows[2][0],rows[2][1],t1,t2);
+ line(c,A.X,A.Y,xs,toh,'rgba(79,195,247,.5)',1,[3,3]);line(c,A.X,A.Y,xs,to,'#4fc3f7',1.6);
+ A=axes(c,x0,rows[3][0],ww,rows[3][1],[t1,t2],mm([tt,tm]),{yl:'rate',xl:'time (s)'});
+ line(c,A.X,A.Y,xs,tt,'#ffd166',1.3);line(c,A.X,A.Y,xs,tm,'#c084fc',1.3);
+ if(tNow>=t1&&tNow<=t2&&$('view').value==='movie'){c.strokeStyle='#fff';c.lineWidth=1;c.beginPath();c.moveTo(A.X(tNow),6);c.lineTo(A.X(tNow),rows[3][0]+rows[3][1]);c.stroke();}
+ cv._map={t1,t2,x0,ww};
+ const p=GL.G[g],k=p.k,f=lk=>isFinite(lk)?Math.pow(10,lk).toPrecision(2):'—';
+ $('selinfo').innerHTML=`${sel>=0?'Selected':'Showing strongest'}: <b>${p.b?'R':'L'}-glom #${k}</b> (homolog dashed) · κ<sub>A</sub> <b>${f(TUN[Q.oA].logK[k])}</b> · κ<sub>B</sub> <b>${f(TUN[Q.oB].logK[k])}</b>${Q.bgOn?` · κ<sub>bg</sub> <b>${f(TUN[Q.oBG].logK[k])}</b>`:''} · Hill n ${GL.rec.n[k].toFixed(1)} · ensemble ${GL.rec.ens[k]} · mean in <b style="color:var(--in)">${R.mean.in[g].toFixed(3)}</b> · mean out <b style="color:var(--out)">${R.mean.out[g].toFixed(3)}</b>. Tap a glomerulus to select it. Blue lines are its selective inhibitory inputs, and the circle is its local GC range.`;}
+function argmax(a){let m=-1e9,k=0;for(let i=0;i<a.length;i++)if(a[i]>m){m=a[i];k=i;}return k;}
+
+// ---- rasters & response types ----
+function presSegments(){const R=RES,{t1,t2}=presWin();const a=Math.max(0,Math.floor((t1-0.5)/R.dtR)),b=Math.min(R.nR,Math.ceil((t2+2)/R.dtR));
+ const seg=(arr,g)=>{const o=new Float32Array(b-a);for(let f=a;f<b;f++)o[f-a]=arr[f*R.N2+g];return o;};return{a,b,seg,t1,t2};}
+function drawRasters(){const R=RES,{a,b,seg,t1,t2}=presSegments(),N2=R.N2;
+ const thrI=0.2*R.scaleIn,thrO=0.2*R.scaleOut,rows=[];
+ for(let g=0;g<N2;g++){const si=seg(R.inD,g),so=seg(R.outD,g);let mi=0,mo=0;for(const v of si)mi=Math.max(mi,v);for(const v of so)mo=Math.max(mo,Math.abs(v));
+  if(mi>thrI||mo>thrO){const i0=Math.round(0.5/R.dtR);let lat=99;for(let i=i0;i<si.length;i++)if(si[i]>0.3*mi&&mi>thrI){lat=(i-i0)*R.dtR;break;}rows.push({g,si,so,mi,mo,lat});}}
+ rows.sort((x,y)=>x.lat-y.lat||y.mo-x.mo);
+ const draw=(cv,kind)=>{const{c,w,h}=setupCanvas(cv);const x0=36,y0=16,ww=w-44,hh=h-40;
+  c.fillStyle='#c3cbd6';c.font='11px system-ui';c.fillText(kind==='in'?`Input · ${rows.length} responsive glomeruli`:'Output (same order)',x0,11);
+  if(!rows.length)return;const rh=hh/rows.length,L=b-a;
+  rows.forEach((r,i)=>{const s=kind==='in'?r.si:r.so,m=kind==='in'?Math.max(r.mi,1e-3):Math.max(r.mo,1e-3);
+   for(let j=0;j<L;j++){const v=s[j]/m;const col=kind==='in'?cmIn(v):cmOut(v);c.fillStyle=`rgb(${col[0]|0},${col[1]|0},${col[2]|0})`;c.fillRect(x0+j*ww/L,y0+i*rh,ww/L+0.6,rh+0.4);}});
+  const X=t=>x0+(t-(a*R.dtR))/((b-a)*R.dtR)*ww;c.strokeStyle='rgba(255,255,255,.6)';c.setLineDash([3,3]);
+  for(const t of[t1,t2]){c.beginPath();c.moveTo(X(t),y0);c.lineTo(X(t),y0+hh);c.stroke();}c.setLineDash([]);
+  c.fillStyle='#8b96a5';c.font='10px system-ui';for(const t of nice(0,(b-a)*R.dtR,5)){c.fillText((t-0.5).toFixed(1),x0+t/((b-a)*R.dtR)*ww-6,y0+hh+11);}
+  c.fillText('time re. odor onset (s)',x0+ww/2-50,y0+hh+22);};
+ draw($('rIn'),'in');draw($('rOut'),'out');
+ // types
+ const types=['sustained','transient','delayed','suppressed','biphasic','offset'],cI={},cO={};types.forEach(t=>{cI[t]=0;cO[t]=0;});
+ const i0=Math.round(0.5/R.dtR);let nI=0,nO=0;
+ for(const r of rows){const ti=OB.respType(r.si.subarray(i0),R.dtR,R.dur,thrI),to=OB.respType(r.so.subarray(i0),R.dtR,R.dur,thrO);if(ti){cI[ti]++;nI++;}if(to){cO[to]++;nO++;}}
+ const{c,w,h}=setupCanvas($('pTypes'));const A=axes(c,40,18,w-50,h-60,[0,6],[0,100],{noX:true,yl:'% of responsive',title:`Response types (in n=${nI}, out n=${nO})`});
+ types.forEach((t,i)=>{const bw=(w-50)/6,x=40+i*bw,vi=nI?100*cI[t]/nI:0,vo=nO?100*cO[t]/nO:0;
+  c.fillStyle='#ffb02e';c.fillRect(x+bw*0.12,A.Y(vi),bw*0.36,A.Y(0)-A.Y(vi));c.fillStyle='#4fc3f7';c.fillRect(x+bw*0.52,A.Y(vo),bw*0.36,A.Y(0)-A.Y(vo));
+  c.save();c.fillStyle='#c3cbd6';c.font='10px system-ui';c.translate(x+bw*0.5-3,h-40);c.rotate(Math.PI/5);c.fillText(t,0,0);c.restore();});}
+
+function drawGain(){const cv=$('pGain'),{c,w,h}=setupCanvas(cv);const xs=[],ex=[],pg=[],nt=[];
+ for(let i=0;i<=100;i++){const x=i/50;const r=OB.gainCurve(x,Q);xs.push(x);ex.push(r.ex);pg.push(-r.pg);nt.push(r.net);}
+ const lo=Math.min(...pg),hi=Math.max(...ex);
+ const A=axes(c,40,18,w-50,h-46,[0,2],[lo*1.05-0.05,hi*1.05],{xl:'normalized ORN input  ORN̄',yl:'drive',title:'Glomerular gain function'});
+ line(c,A.X,A.Y,i=>xs[i],ex,'#4fc3f7',1.5);line(c,A.X,A.Y,i=>xs[i],pg,'#5b8cff',1.5);line(c,A.X,A.Y,i=>xs[i],nt,'#fff',2);}
+function drawScatter(){const cv=$('pScatter'),{c,w,h}=setupCanvas(cv);const a=RES.mean.in,b=RES.mean.out;
+ let xm=0.02,yl=-0.02,yh=0.02;for(let g=0;g<a.length;g++){xm=Math.max(xm,a[g]);yl=Math.min(yl,b[g]);yh=Math.max(yh,b[g]);}
+ const A=axes(c,44,18,w-54,h-46,[Math.min(0,...a)-0.005,xm*1.05],[yl*1.1,yh*1.1],{xl:'input ΔF/F',yl:'output ΔF/F',title:`In→out, presentation #${(+$('pres').value||0)+1}`});
+ for(let g=0;g<a.length;g++){c.fillStyle=g<RES.N?'rgba(255,176,46,.65)':'rgba(79,195,247,.65)';c.beginPath();c.arc(A.X(a[g]),A.Y(b[g]),2.2,0,7);c.fill();}
+ if(sel>=0){c.strokeStyle='#ffd23f';c.lineWidth=2;c.beginPath();c.arc(A.X(a[sel]),A.Y(b[sel]),5,0,7);c.stroke();}
+ c.fillStyle='#ffb02e';c.fillText('● L',w-60,30);c.fillStyle='#4fc3f7';c.fillText('● R',w-34,30);}
+
+// ---- sniff-rate (adaptive filter) curve ----
+const FR=[1,2,3,4,6,8,10];
+function runSniff(){const out=[];for(const lab of['on','off']){const ys=[];
+ for(const f of FR){const Qc=Object.assign({},Q,{pattern:'A',npulse:1,dur:4,pre:1.5,post:0.5,noise:0,f0:f,boutOn:false,DEPon:lab==='on'?Q.DEPon:false,indIn:'CaDye'});
+  const r=sim(Qc),N2=r.N2,o=r.on[0],late=OB.windowMean(r,r.inD,o+3,o+4);
+  let s2=0;for(let g=0;g<N2;g++)s2+=Math.max(0,late[g]);ys.push(s2);}out.push(ys);}
+ const ref=out[1][0]||1;SNF=out.map(a=>a.map(v=>v/ref));drawSniff();}
+function drawSniff(){if(!SNF)return;const{c,w,h}=setupCanvas($('pSniff'));const hi=Math.max(1.2,...SNF[0],...SNF[1]);
+ const A=axes(c,40,18,w-50,h-46,[0,10],[0,hi*1.05],{xl:'sniff rate (Hz)',yl:'sustained input (norm.)',title:'Adaptive filter of ORN input'});
+ line(c,A.X,A.Y,i=>FR[i],SNF[1],'#7d8796',1.5,[4,3]);line(c,A.X,A.Y,i=>FR[i],SNF[0],'#9be29b',2);
+ c.fillStyle='#9be29b';c.fillText('with depression',w-120,32);c.fillStyle='#7d8796';c.fillText('without',w-120,44);}
+
+// ---- concentration series ----
+const CL=[-2,-1.5,-1,-0.5,0,0.5,1];
+function runConc(){const Qc=Object.assign({},Q,{pattern:'A',npulse:1,dur:Math.min(Q.dur,2),pre:1.5,post:1.5,noise:0});const ins=[],outs=[];
+ for(const lc of CL){Qc.logcA=lc;const r=sim(Qc);ins.push(OB.windowMean(r,r.inD,r.on[0],r.on[0]+r.dur+0.3));outs.push(OB.windowMean(r,r.outD,r.on[0],r.on[0]+r.dur+0.3));}
+ CONC={ins,outs};drawConc();}
+function corr(a,b){const n=a.length;if(n<3)return 0;let ma=0,mb=0;for(let i=0;i<n;i++){ma+=a[i];mb+=b[i];}ma/=n;mb/=n;let s=0,sa=0,sb=0;for(let i=0;i<n;i++){const x=a[i]-ma,y=b[i]-mb;s+=x*y;sa+=x*x;sb+=y*y;}return s/Math.sqrt(sa*sb+1e-12);}
+function drawConc(){if(!CONC)return;const{ins,outs}=CONC,N2=ins[0].length,N=N2/2,K=CL.length;
+ const sumI=ins.map(a=>a.reduce((s,v)=>s+Math.max(0,v),0)),sumO=outs.map(a=>a.reduce((s,v)=>s+Math.max(0,v),0));
+ const mI=Math.max(...sumI)||1,mO=Math.max(...sumO)||1;
+ const thrI=0.1*Math.max(...ins.map(a=>Math.max(...a))),thrO=0.1*Math.max(...outs.map(a=>Math.max(...a.map(Math.abs))));
+ const nI=ins.map(a=>a.filter(v=>v>thrI).length/N2),nO=outs.map(a=>a.filter(v=>v>thrO).length/N2);
+ let{c,w,h}=setupCanvas($('pPop'));let A=axes(c,40,18,w-50,h-46,[-2,1],[0,1.05],{xl:'log₁₀ concentration (A)',yl:'normalized',title:'Population input vs output'});
+ const xs=i=>CL[i];line(c,A.X,A.Y,xs,sumI.map(v=>v/mI),'#ffb02e',2);line(c,A.X,A.Y,xs,sumO.map(v=>v/mO),'#4fc3f7',2);
+ line(c,A.X,A.Y,xs,nI,'#ffb02e',1.2,[4,3]);line(c,A.X,A.Y,xs,nO,'#4fc3f7',1.2,[4,3]);
+ const g=sel>=0?sel:argmax(RES.peak.in);({c,w,h}=setupCanvas($('pSel')));
+ const yi=ins.map(a=>a[g]),yo=outs.map(a=>a[g]);const lo=Math.min(0,...yi,...yo),hi=Math.max(0.02,...yi,...yo);
+ A=axes(c,44,18,w-54,h-46,[-2,1],[lo-0.1*(hi-lo),hi*1.1],{xl:'log₁₀ concentration (A)',yl:'ΔF/F',title:`${GL.G[g].b?'R':'L'}-glom #${GL.G[g].k}: ${classify(yo,thrO)||'non-responsive'}`});
+ line(c,A.X,A.Y,xs,yi,'#ffb02e',2);line(c,A.X,A.Y,xs,yo,'#4fc3f7',2);
+ const keep=[];for(let k=0;k<N2;k++)if(outs.some(a=>Math.abs(a[k])>thrO)||ins.some(a=>a[k]>thrI))keep.push(k);
+ const sub=a=>keep.map(k=>a[k]);const rI=ins.map(a=>corr(sub(a),sub(ins[K-1]))),rO=outs.map(a=>corr(sub(a),sub(outs[K-1])));
+ ({c,w,h}=setupCanvas($('pCorr')));A=axes(c,40,18,w-50,h-46,[-2,1],[Math.min(0,...rI,...rO),1.02],{xl:'log₁₀ concentration (A)',yl:'r vs top conc.',title:'Concentration invariance of maps'});
+ line(c,A.X,A.Y,xs,rI,'#ffb02e',2);line(c,A.X,A.Y,xs,rO,'#4fc3f7',2);
+ const cats={I:0,D:0,DI:0,ID:0};for(let k=0;k<N;k++){const cl=classify(outs.map(a=>a[k]),thrO);if(cl)cats[cl]++;}
+ const tot=Object.values(cats).reduce((s,v)=>s+v,0)||1;({c,w,h}=setupCanvas($('pCat')));
+ const ref={I:37,D:14,DI:10,ID:39};A=axes(c,40,18,w-50,h-46,[0,4],[0,100],{noX:true,yl:'% of responsive',title:`Output categories (n = ${tot})`});
+ ['I','D','DI','ID'].forEach((k,i)=>{const bw=(w-50)/4,x=40+i*bw,v=100*cats[k]/tot;c.fillStyle='#4fc3f7';c.fillRect(x+bw*0.18,A.Y(v),bw*0.32,A.Y(0)-A.Y(v));
+  c.fillStyle='#5d6675';c.fillRect(x+bw*0.52,A.Y(ref[k]),bw*0.32,A.Y(0)-A.Y(ref[k]));c.fillStyle='#c3cbd6';c.fillText(k,x+bw*0.45,h-14);c.fillText(v.toFixed(0)+'%',x+bw*0.18,A.Y(v)-3);});}
+function classify(y,thr){let mx=-1e9,mn=1e9,im=0,inn=0;for(let i=0;i<y.length;i++){if(y[i]>mx){mx=y[i];im=i;}if(y[i]<mn){mn=y[i];inn=i;}}
+ const L=y.length-1;if(Math.max(Math.abs(mx),Math.abs(mn))<thr)return null;
+ if(mx>=Math.abs(mn))return(im===L||y[L]>=0.8*mx)?'I':'ID';return(inn===L||y[L]<=0.8*mn)?'D':'DI';}
+
+// ---- interaction ----
+for(const[id]of SL){$(id).addEventListener('input',()=>{$(id+'_v').textContent=fmt(id,+$(id).value);
+ schedule(REBUILD_G.has(id)?'glom':REBUILD_K.has(id)?'ker':DISPLAY_ONLY.has(id)?'fp':'sim');});}
+for(const id of['odorA','odorB','odorBG','pattern','boutOn','indIn','indOut','SAon','PGon','GCon','DEPon'])$(id).addEventListener('change',()=>schedule('sim'));
+$('seed').addEventListener('change',()=>schedule('glom'));
+$('reseed').onclick=()=>{$('seed').value=1+Math.floor(Math.random()*999);schedule('glom');};
+$('outlines').onchange=drawAll;$('view').onchange=drawAll;$('traceWin').onchange=drawTraces;
+$('pres').onchange=()=>{computeSummaries();drawAll();};
+$('reset').onclick=()=>{for(const[id,,,,,df,grp]of SL)if(['orn','gain','mtc'].includes(grp))$(id).value=df;for(const id of['SAon','PGon','GCon','DEPon'])$(id).checked=true;schedule('ker');};
+$('scrub').addEventListener('input',()=>{if(!RES)return;tNow=RES.total*$('scrub').value/1000;$('view').value='movie';drawAll();});
+$('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'❚❚ Pause':'▶ Play';if(playing){$('view').value='movie';lastTS=performance.now();requestAnimationFrame(tick);}};
+function tick(ts){if(!playing)return;const dtw=Math.min(0.1,(ts-lastTS)/1000);lastTS=ts;if(RES){tNow+=dtw*+$('speed').value;if(tNow>RES.total)tNow=0;
+ renderMap($('mapIn'),'in');renderMap($('mapOut'),'out');drawTraces();$('scrub').value=Math.round(1000*tNow/RES.total);$('tlabel').textContent=`${tNow.toFixed(2)} / ${RES.total.toFixed(1)} s`;}
+ requestAnimationFrame(tick);}
+function pick(e,cv){const r=cv.getBoundingClientRect(),{GEO}=OB;const x=(e.clientX-r.left)/r.width*GEO.W-GEO.W/2,y=(e.clientY-r.top)/r.height*GEO.H-GEO.H/2;
+ let best=-1,bd=90*90;GL.G.forEach((p,i)=>{const d=(p.x-x)**2+(p.y-y)**2;if(d<bd){bd=d;best=i;}});sel=best;drawAll();drawConc();}
+$('mapIn').addEventListener('click',e=>pick(e,$('mapIn')));$('mapOut').addEventListener('click',e=>pick(e,$('mapOut')));
+$('traces').addEventListener('click',e=>{const cv=$('traces'),m=cv._map;if(!m)return;const r=cv.getBoundingClientRect();const fx=(e.clientX-r.left-m.x0)/m.ww;if(fx<0||fx>1)return;
+ tNow=m.t1+fx*(m.t2-m.t1);$('view').value='movie';drawAll();});
+$('csv').onclick=()=>{if(!RES)return;let s='bulb,glom,x_um,y_um,logK_A,logK_B,hill_n,ensemble,mean_in_dFF,mean_out_dFF,peak_in_dFF,peak_out_dFF\n';
+ GL.G.forEach((p,g)=>{s+=`${p.b?'R':'L'},${p.k},${p.x.toFixed(0)},${p.y.toFixed(0)},${TUN[Q.oA].logK[p.k]},${TUN[Q.oB].logK[p.k]},${GL.rec.n[p.k].toFixed(2)},${GL.rec.ens[p.k]},${RES.mean.in[g].toFixed(4)},${RES.mean.out[g].toFixed(4)},${RES.peak.in[g].toFixed(4)},${RES.peak.out[g].toFixed(4)}\n`;});
+ navigator.clipboard.writeText(s).then(()=>{$('csvmsg').textContent=`Copied ${GL.G.length} rows. Paste into a spreadsheet.`;}).catch(()=>{$('csvmsg').textContent='Clipboard blocked by the browser.';});};
+let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(!RES)return;drawStim();drawAll();drawGain();drawConc();drawSniff();},100);});
+readQ();run('glom');
+</script>
+</body>
+</html>
